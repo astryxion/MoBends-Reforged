@@ -1,0 +1,31 @@
+package net.gobbob.mobends.animation.player;
+
+import net.gobbob.mobends.client.model.ModelRendererBends;
+import net.gobbob.mobends.client.model.entity.ModelBendsPlayer;
+import net.gobbob.mobends.data.Data_Player;
+import net.minecraft.entity.player.EntityPlayer;
+
+public class Animation_Attack_PunchStance {
+   public static void animate(EntityPlayer player, ModelBendsPlayer model, Data_Player data) {
+      if (data.motion.x == 0.0F && data.motion.z == 0.0F) {
+         model.renderRotation.setSmoothY(20.0F);
+         model.renderOffset.setSmoothY(-2.0F);
+         ((ModelRendererBends)model.bipedRightArm).rotation.setSmoothX(-90.0F, 0.3F);
+         ((ModelRendererBends)model.bipedRightForeArm).rotation.setSmoothX(-80.0F, 0.3F);
+         ((ModelRendererBends)model.bipedLeftArm).rotation.setSmoothX(-90.0F, 0.3F);
+         ((ModelRendererBends)model.bipedLeftForeArm).rotation.setSmoothX(-80.0F, 0.3F);
+         ((ModelRendererBends)model.bipedRightArm).rotation.setSmoothZ(20.0F, 0.3F);
+         ((ModelRendererBends)model.bipedLeftArm).rotation.setSmoothZ(-20.0F, 0.3F);
+         ((ModelRendererBends)model.bipedBody).rotation.setSmoothX(10.0F, 0.3F);
+         ((ModelRendererBends)model.bipedRightLeg).rotation.setSmoothX(-30.0F, 0.3F);
+         ((ModelRendererBends)model.bipedLeftLeg).rotation.setSmoothX(-30.0F, 0.3F);
+         ((ModelRendererBends)model.bipedLeftLeg).rotation.setSmoothY(-25.0F, 0.3F);
+         ((ModelRendererBends)model.bipedRightLeg).rotation.setSmoothZ(10.0F);
+         ((ModelRendererBends)model.bipedLeftLeg).rotation.setSmoothZ(-10.0F);
+         ((ModelRendererBends)model.bipedRightForeLeg).rotation.setSmoothX(30.0F, 0.3F);
+         ((ModelRendererBends)model.bipedLeftForeLeg).rotation.setSmoothX(30.0F, 0.3F);
+         ((ModelRendererBends)model.bipedHead).rotation.setSmoothY(model.headRotationY - 20.0F, 0.3F);
+         ((ModelRendererBends)model.bipedHead).rotation.setSmoothX(model.headRotationX - 10.0F, 0.3F);
+      }
+   }
+}

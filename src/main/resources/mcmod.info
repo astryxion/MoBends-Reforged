@@ -1,0 +1,16 @@
+[
+{
+  "modid": "mobends",
+  "name": "Mo' Bends",
+  "description": "Mo' Bends for 1.7.10 revamped with bug fixes, compatibility, and some 1.12.2 backports",
+  "version": "${version}",
+  "mcversion": "${mcversion}",
+  "url": "",
+  "updateUrl": "",
+  "authorList": ["Astryxion"],
+  "credits": "GobBob",
+  "logoFile": "logo.png",
+  "screenshots": [],
+  "dependencies": []
+}
+]
