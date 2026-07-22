@@ -14,19 +14,27 @@ public class ArmorConverter {
       newModel.bipedHead = convertBox((ModelRendererBends)newModel.bipedHead, original.bipedHead);
       newModel.bipedHeadwear = convertBox((ModelRendererBends)newModel.bipedHeadwear, original.bipedHeadwear);
       newModel.bipedLeftArm = convertBox((ModelRendererBends)newModel.bipedLeftArm, original.bipedLeftArm);
-      newModel.bipedLeftLeg = convertBox((ModelRendererBends)newModel.bipedBody, original.bipedBody);
-      newModel.bipedRightArm = convertBox((ModelRendererBends)newModel.bipedBody, original.bipedBody);
-      newModel.bipedRightLeg = convertBox((ModelRendererBends)newModel.bipedBody, original.bipedBody);
+      newModel.bipedLeftLeg = convertBox((ModelRendererBends)newModel.bipedLeftLeg, original.bipedLeftLeg);
+      newModel.bipedRightArm = convertBox((ModelRendererBends)newModel.bipedRightArm, original.bipedRightArm);
+      newModel.bipedRightLeg = convertBox((ModelRendererBends)newModel.bipedRightLeg, original.bipedRightLeg);
       CustomArmor newArmor = new CustomArmor(newModel, argTexture);
       return newArmor;
    }
 
    public static ModelRendererBends convertBox(ModelRendererBends argBox, ModelRenderer argOld) {
-      if (argOld.childModels != null) {
-         for(int i = 0; i < argOld.childModels.size(); ++i) {
-            argBox.childModels.add(argOld.childModels.get(i));
+      if (argOld == null) {
+         return argBox;
+      }
+
+      argBox.cubeList.clear();
+      if (argOld.cubeList != null) {
+         for (int i = 0; i < argOld.cubeList.size(); ++i) {
+            argBox.cubeList.add(argOld.cubeList.get(i));
          }
       }
+
+      argBox.mirror = argOld.mirror;
+      argBox.compiled = false;
 
       return argBox;
    }

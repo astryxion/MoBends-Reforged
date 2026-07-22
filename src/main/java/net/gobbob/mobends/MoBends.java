@@ -18,7 +18,7 @@ import net.minecraftforge.common.config.Configuration;
 
 @Mod(
    modid = "mobends",
-   version = "1.0.0",
+   version = "1.1.0",
    dependencies = "after:Hats;after:fiskheroes;after:legends;after:skinlayers3d"
 )
 public class MoBends {

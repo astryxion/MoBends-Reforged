@@ -19,6 +19,11 @@ public class ModelCustomArmor extends ModelBiped {
    public float headRotationY;
    public float armSwing;
    public float armSwingAmount;
+   private ModelBendsPlayer sourceModel;
+
+   public void setSourceModel(ModelBendsPlayer argModel) {
+      this.sourceModel = argModel;
+   }
 
    public ModelCustomArmor() {
       this(0.0F);
@@ -111,13 +116,21 @@ public class ModelCustomArmor extends ModelBiped {
          GL11.glPopMatrix();
       } else {
          this.bipedBody.render(p_78088_7_);
-         this.bipedRightLeg.render(p_78088_7_);
-         this.bipedLeftLeg.render(p_78088_7_);
+         if (this.bipedRightLeg.showModel) {
+            this.bipedRightLeg.render(p_78088_7_);
+         }
+
+         if (this.bipedLeftLeg.showModel) {
+            this.bipedLeftLeg.render(p_78088_7_);
+         }
       }
 
    }
 
    public void setRotationAngles(float argSwingTime, float argSwingAmount, float argArmSway, float argHeadY, float argHeadX, float argNr6, Entity argEntity) {
+      if (this.sourceModel != null) {
+         this.updateWithModelData(this.sourceModel);
+      }
    }
 
    public void updateWithModelData(ModelBendsPlayer argModel) {

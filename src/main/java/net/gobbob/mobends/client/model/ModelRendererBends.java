@@ -82,9 +82,7 @@ public class ModelRendererBends extends ModelRenderer {
             }
 
             if ((this.showChildIfHidden || !this.isHidden && this.showModel) && this.childModels != null) {
-               for(int i = 0; i < this.childModels.size(); ++i) {
-                  ((ModelRenderer)this.childModels.get(i)).render(p_78785_1_);
-               }
+               this.renderChildModels(p_78785_1_);
             }
          } else {
             GL11.glTranslatef(this.rotationPointX * p_78785_1_, this.rotationPointY * p_78785_1_, this.rotationPointZ * p_78785_1_);
@@ -97,9 +95,7 @@ public class ModelRendererBends extends ModelRenderer {
             }
 
             if ((this.showChildIfHidden || !this.isHidden && this.showModel) && this.childModels != null) {
-               for(int i = 0; i < this.childModels.size(); ++i) {
-                  ((ModelRenderer)this.childModels.get(i)).render(p_78785_1_);
-               }
+               this.renderChildModels(p_78785_1_);
             }
 
             GL11.glTranslatef(-this.rotationPointX * p_78785_1_, -this.rotationPointY * p_78785_1_, -this.rotationPointZ * p_78785_1_);
@@ -128,15 +124,24 @@ public class ModelRendererBends extends ModelRenderer {
          }
 
          if ((this.showChildIfHidden || !this.isHidden && this.showModel) && this.childModels != null) {
-            for(int i = 0; i < this.childModels.size(); ++i) {
-               ((ModelRenderer)this.childModels.get(i)).render(p_78785_1_);
-            }
+            this.renderChildModels(p_78785_1_);
          }
 
          GL11.glPopMatrix();
       }
 
       GL11.glTranslatef(-this.offsetX, -this.offsetY, -this.offsetZ);
+   }
+
+   private void renderChildModels(float scale) {
+      boolean parentHidden = this.showChildIfHidden && !this.showModel;
+
+      for (int i = 0; i < this.childModels.size(); ++i) {
+         ModelRenderer child = (ModelRenderer)this.childModels.get(i);
+         if (!parentHidden || child.showModel) {
+            child.render(scale);
+         }
+      }
    }
 
    public void update(float p_78785_1_) {

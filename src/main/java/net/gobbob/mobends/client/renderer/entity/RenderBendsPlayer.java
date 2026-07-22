@@ -3,6 +3,7 @@ package net.gobbob.mobends.client.renderer.entity;
 import com.mojang.authlib.GameProfile;
 import java.util.UUID;
 import net.gobbob.mobends.MoBends;
+import net.gobbob.mobends.client.model.ModelCustomArmor;
 import net.gobbob.mobends.client.model.entity.ModelBendsPlayer;
 import net.gobbob.mobends.compat.skinlayers3d.SkinLayersRender;
 import net.gobbob.mobends.compat.superhero.SuperheroArmorCompat;
@@ -93,6 +94,15 @@ public class RenderBendsPlayer extends RenderPlayer {
                ResourceLocation texture = RenderBiped.getArmorResource(p_77032_1_, itemstack, p_77032_2_, (String)null);
                this.bindTexture(texture);
                ModelBiped modelbiped = p_77032_2_ == 2 ? this.modelArmor : this.modelArmorChestplate;
+               modelbiped = ForgeHooksClient.getArmorModel(p_77032_1_, itemstack, p_77032_2_, modelbiped);
+               // Fisk / Legends suits keep their own models. Never wrap with CustomArmor.
+               if (!this.usingVanillaModels && !SuperheroArmorCompat.isSuperheroArmorItem(item)) {
+                  modelbiped = CustomArmor.get(modelbiped, texture.getResourcePath(), p_77032_2_ == 2 ? 0.5F : 1.0F).armorModel;
+                  if (modelbiped instanceof ModelCustomArmor && this.modelBipedMain instanceof ModelBendsPlayer) {
+                     ((ModelCustomArmor)modelbiped).setSourceModel((ModelBendsPlayer)this.modelBipedMain);
+                  }
+               }
+
                modelbiped.bipedHead.showModel = p_77032_2_ == 0;
                modelbiped.bipedHeadwear.showModel = p_77032_2_ == 0;
                modelbiped.bipedBody.showModel = p_77032_2_ == 1 || p_77032_2_ == 2;
@@ -100,11 +110,6 @@ public class RenderBendsPlayer extends RenderPlayer {
                modelbiped.bipedLeftArm.showModel = p_77032_2_ == 1;
                modelbiped.bipedRightLeg.showModel = p_77032_2_ == 2 || p_77032_2_ == 3;
                modelbiped.bipedLeftLeg.showModel = p_77032_2_ == 2 || p_77032_2_ == 3;
-               modelbiped = ForgeHooksClient.getArmorModel(p_77032_1_, itemstack, p_77032_2_, modelbiped);
-               // Fisk / Legends suits keep their own models. Never wrap with CustomArmor.
-               if (!this.usingVanillaModels && !SuperheroArmorCompat.isSuperheroArmorItem(item)) {
-                  modelbiped = CustomArmor.get(modelbiped, texture.getResourcePath(), p_77032_2_ == 2 ? 0.5F : 1.0F).armorModel;
-               }
 
                this.setRenderPassModel(modelbiped);
                modelbiped.onGround = this.mainModel.onGround;
