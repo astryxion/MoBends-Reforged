@@ -16,6 +16,14 @@ public class ModelBoxBends extends ModelBox {
    public float originalResX;
    public float originalResY;
    public float originalResZ;
+   /**
+    * The {@code addBox(..., inflate)} argument, captured so {@link #updateVertexPositions} can
+    * re-apply it to the rebuilt vertices exactly like the constructor does. Without this, any
+    * box built with a non-zero {@code inflate} (e.g. {@code ModelBendsPlayer(1.0F)} chestplate)
+    * would silently lose its inflation as soon as the constructor's tail
+    * {@code .resizeBox(...).updateVertices()} chain ran, collapsing armor sleeves onto the arm.
+    */
+   public float boxInflation;
    public float txOffsetX;
    public float txOffsetY;
    public PositionTextureVertex[] vertices;
@@ -35,6 +43,7 @@ public class ModelBoxBends extends ModelBox {
       this.resX = this.originalResX = (float)p_i1171_7_;
       this.resY = this.originalResY = (float)p_i1171_8_;
       this.resZ = this.originalResZ = (float)p_i1171_9_;
+      this.boxInflation = p_i1171_10_;
       this.txOffsetX = (float)p_i1171_2_;
       this.txOffsetY = (float)p_i1171_3_;
       this.vertices = new PositionTextureVertex[8];
@@ -93,20 +102,29 @@ public class ModelBoxBends extends ModelBox {
       int p_i1171_7_ = (int)this.originalResX;
       int p_i1171_8_ = (int)this.originalResY;
       int p_i1171_9_ = (int)this.originalResZ;
+      // Mirror the constructor's inflation step: inflate the max corner by +boxInflation and
+      // the min corner by -boxInflation, so updateVertexPositions reproduces the geometry the
+      // constructor baked in (instead of silently dropping the inflate argument).
+      f4 += this.boxInflation;
+      f5 += this.boxInflation;
+      f6 += this.boxInflation;
+      float min0 = this.offsetX - this.boxInflation;
+      float min1 = this.offsetY - this.boxInflation;
+      float min2 = this.offsetZ - this.boxInflation;
       if (p_i1171_1_.mirror) {
          float f7 = f4;
-         f4 = this.offsetX;
-         this.offsetX = f7;
+         f4 = min0;
+         min0 = f7;
       }
 
-      PositionTextureVertex positiontexturevertex7 = new PositionTextureVertex(this.offsetX, this.offsetY, this.offsetZ, 0.0F, 0.0F);
-      PositionTextureVertex positiontexturevertex = new PositionTextureVertex(f4, this.offsetY, this.offsetZ, 0.0F, 8.0F);
-      PositionTextureVertex positiontexturevertex1 = new PositionTextureVertex(f4, f5, this.offsetZ, 8.0F, 8.0F);
-      PositionTextureVertex positiontexturevertex2 = new PositionTextureVertex(this.offsetX, f5, this.offsetZ, 8.0F, 0.0F);
-      PositionTextureVertex positiontexturevertex3 = new PositionTextureVertex(this.offsetX, this.offsetY, f6, 0.0F, 0.0F);
-      PositionTextureVertex positiontexturevertex4 = new PositionTextureVertex(f4, this.offsetY, f6, 0.0F, 8.0F);
+      PositionTextureVertex positiontexturevertex7 = new PositionTextureVertex(min0, min1, min2, 0.0F, 0.0F);
+      PositionTextureVertex positiontexturevertex = new PositionTextureVertex(f4, min1, min2, 0.0F, 8.0F);
+      PositionTextureVertex positiontexturevertex1 = new PositionTextureVertex(f4, f5, min2, 8.0F, 8.0F);
+      PositionTextureVertex positiontexturevertex2 = new PositionTextureVertex(min0, f5, min2, 8.0F, 0.0F);
+      PositionTextureVertex positiontexturevertex3 = new PositionTextureVertex(min0, min1, f6, 0.0F, 0.0F);
+      PositionTextureVertex positiontexturevertex4 = new PositionTextureVertex(f4, min1, f6, 0.0F, 8.0F);
       PositionTextureVertex positiontexturevertex5 = new PositionTextureVertex(f4, f5, f6, 8.0F, 8.0F);
-      PositionTextureVertex positiontexturevertex6 = new PositionTextureVertex(this.offsetX, f5, f6, 8.0F, 0.0F);
+      PositionTextureVertex positiontexturevertex6 = new PositionTextureVertex(min0, f5, f6, 8.0F, 0.0F);
       this.vertices[0] = positiontexturevertex7;
       this.vertices[1] = positiontexturevertex;
       this.vertices[2] = positiontexturevertex1;
@@ -125,8 +143,6 @@ public class ModelBoxBends extends ModelBox {
          for(int j1 = 0; j1 < this.quads.length; ++j1) {
             this.quads[j1].flipFace();
          }
-
-         this.offsetX = f4;
       }
 
    }
