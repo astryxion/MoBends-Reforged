@@ -167,12 +167,18 @@ public class ModelBendsZombie extends ModelBiped {
             ((ModelRendererBends)this.bipedRightForeLeg).resetScale();
             ((ModelRendererBends)this.bipedLeftForeLeg).resetScale();
             BendsVar.tempData = Data_Zombie.get(argEntity.getEntityId());
+            String packId = "zombie";
+            if (argEntity instanceof net.minecraft.entity.monster.EntityPigZombie) {
+               packId = "pigzombie";
+            } else if (argEntity instanceof net.minecraft.entity.monster.EntityZombie && ((net.minecraft.entity.monster.EntityZombie)argEntity).isVillager()) {
+               packId = "zombievillager";
+            }
             if (Data_Zombie.get(argEntity.getEntityId()).motion.x == 0.0F && Data_Zombie.get(argEntity.getEntityId()).motion.z == 0.0F) {
                AnimatedEntity.getByEntity(argEntity).get("stand").animate((EntityLivingBase)argEntity, this, Data_Zombie.get(argEntity.getEntityId()));
-               BendsPack.animate(this, "zombie", "stand");
+               BendsPack.animate(this, packId, "stand");
             } else {
                AnimatedEntity.getByEntity(argEntity).get("walk").animate((EntityLivingBase)argEntity, this, Data_Zombie.get(argEntity.getEntityId()));
-               BendsPack.animate(this, "zombie", "walk");
+               BendsPack.animate(this, packId, "walk");
             }
 
             ((ModelRendererBends)this.bipedHead).update(data.ticksPerFrame);

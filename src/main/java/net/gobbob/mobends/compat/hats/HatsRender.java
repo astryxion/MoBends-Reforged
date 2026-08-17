@@ -5,6 +5,7 @@ import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import net.gobbob.mobends.client.model.entity.ModelBendsSpider;
 import net.minecraft.client.model.ModelBiped;
+import net.minecraft.entity.monster.EntitySkeleton;
 import net.minecraft.entity.monster.EntitySpider;
 import net.minecraft.entity.monster.EntityZombie;
 import net.minecraft.entity.player.EntityPlayer;
@@ -79,6 +80,14 @@ public final class HatsRender {
    }
 
    public static void renderZombieHat(EntityZombie zombie, ModelBiped model, float partialTicks) {
+      renderBipedMobHat(zombie, model, partialTicks);
+   }
+
+   public static void renderSkeletonHat(EntitySkeleton skeleton, ModelBiped model, float partialTicks) {
+      renderBipedMobHat(skeleton, model, partialTicks);
+   }
+
+   private static void renderBipedMobHat(net.minecraft.entity.EntityLivingBase living, ModelBiped model, float partialTicks) {
       if (!isActive() || model == null || renderMobHat == null) {
          return;
       }
@@ -90,7 +99,7 @@ public final class HatsRender {
          model.bipedHead.postRender(0.0625F);
       }
       try {
-         renderMobHat.invoke(null, zombie, Float.valueOf(partialTicks));
+         renderMobHat.invoke(null, living, Float.valueOf(partialTicks));
       } catch (Throwable ignored) {
       }
       GL11.glPopMatrix();

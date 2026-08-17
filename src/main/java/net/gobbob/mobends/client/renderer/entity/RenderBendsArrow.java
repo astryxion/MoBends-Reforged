@@ -3,6 +3,7 @@ package net.gobbob.mobends.client.renderer.entity;
 import net.gobbob.mobends.settings.SettingsBoolean;
 import net.gobbob.mobends.settings.SettingsNode;
 import net.minecraft.client.renderer.entity.RenderArrow;
+import net.minecraft.entity.monster.EntitySkeleton;
 import net.minecraft.entity.projectile.EntityArrow;
 
 /**
@@ -14,6 +15,21 @@ public class RenderBendsArrow extends RenderArrow {
          ArrowTrailManager.renderTrail(entity, x, y, z, partialTicks);
       }
 
-      super.doRender(entity, x, y, z, entityYaw, partialTicks);
+      // Skeleton-shot arrows render nock-first with vanilla yaw; player-shot ones do not.
+      boolean flip = entity.shootingEntity instanceof EntitySkeleton;
+      if (flip) {
+         entity.prevRotationYaw += 180.0F;
+         entity.rotationYaw += 180.0F;
+         entityYaw += 180.0F;
+      }
+
+      try {
+         super.doRender(entity, x, y, z, entityYaw, partialTicks);
+      } finally {
+         if (flip) {
+            entity.prevRotationYaw -= 180.0F;
+            entity.rotationYaw -= 180.0F;
+         }
+      }
    }
 }

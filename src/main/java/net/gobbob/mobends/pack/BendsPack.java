@@ -10,7 +10,9 @@ import java.util.ArrayList;
 import java.util.List;
 import net.gobbob.mobends.client.model.ModelRendererBends;
 import net.gobbob.mobends.client.model.entity.ModelBendsPlayer;
+import net.gobbob.mobends.client.model.entity.ModelBendsSkeleton;
 import net.gobbob.mobends.client.model.entity.ModelBendsSpider;
+import net.gobbob.mobends.client.model.entity.ModelBendsSquid;
 import net.gobbob.mobends.client.model.entity.ModelBendsZombie;
 import net.gobbob.mobends.util.BendsLogger;
 import net.gobbob.mobends.util.EnumAxis;
@@ -316,6 +318,21 @@ public class BendsPack {
       }
    }
 
+   public static void animate(ModelBendsSkeleton model, String target, String anim) {
+      if (getTargetByID(target) != null) {
+         getTargetByID(target).applyToModel((ModelRendererBends)model.bipedBody, anim, "body");
+         getTargetByID(target).applyToModel((ModelRendererBends)model.bipedHead, anim, "head");
+         getTargetByID(target).applyToModel((ModelRendererBends)model.bipedLeftArm, anim, "leftArm");
+         getTargetByID(target).applyToModel((ModelRendererBends)model.bipedRightArm, anim, "rightArm");
+         getTargetByID(target).applyToModel((ModelRendererBends)model.bipedLeftLeg, anim, "leftLeg");
+         getTargetByID(target).applyToModel((ModelRendererBends)model.bipedRightLeg, anim, "rightLeg");
+         getTargetByID(target).applyToModel(model.bipedLeftForeArm, anim, "leftForeArm");
+         getTargetByID(target).applyToModel(model.bipedRightForeArm, anim, "rightForeArm");
+         getTargetByID(target).applyToModel(model.bipedLeftForeLeg, anim, "leftForeLeg");
+         getTargetByID(target).applyToModel(model.bipedRightForeLeg, anim, "rightForeLeg");
+      }
+   }
+
    public static void animate(ModelBendsSpider model, String target, String anim) {
       if (getTargetByID(target) != null) {
          getTargetByID(target).applyToModel((ModelRendererBends)model.spiderBody, anim, "body");
@@ -337,6 +354,20 @@ public class BendsPack {
          getTargetByID(target).applyToModel(model.spiderForeLeg6, anim, "foreLeg7");
          getTargetByID(target).applyToModel(model.spiderForeLeg7, anim, "foreLeg7");
          getTargetByID(target).applyToModel(model.spiderForeLeg8, anim, "foreLeg8");
+      }
+   }
+
+   public static void animate(ModelBendsSquid model, String target, String anim) {
+      if (getTargetByID(target) != null) {
+         getTargetByID(target).applyToModel(model.squidBody, anim, "body");
+         getTargetByID(target).applyToModel(model.tentacles[0][0], anim, "tentacle1");
+         getTargetByID(target).applyToModel(model.tentacles[1][0], anim, "tentacle2");
+         getTargetByID(target).applyToModel(model.tentacles[2][0], anim, "tentacle3");
+         getTargetByID(target).applyToModel(model.tentacles[3][0], anim, "tentacle4");
+         getTargetByID(target).applyToModel(model.tentacles[4][0], anim, "tentacle5");
+         getTargetByID(target).applyToModel(model.tentacles[5][0], anim, "tentacle6");
+         getTargetByID(target).applyToModel(model.tentacles[6][0], anim, "tentacle7");
+         getTargetByID(target).applyToModel(model.tentacles[7][0], anim, "tentacle8");
       }
    }
 

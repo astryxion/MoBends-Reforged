@@ -1,15 +1,9 @@
-# Mo' Bends
+# Mo' Bends Reforged
 
-Mo' Bends for 1.7.10 revamped with bug fixes, compatibility, and some 1.12.2 backports
+Mo' Bends for 1.7.10, rebuilt with 1.12.2-style menus, live animation toggles, armor that follows bent limbs, and extra mod compatibility.
 
-## Attribution
-
-**Author:** Astryxion
-
-**Credits:** Astryxion, IVESIRIS
-
-## License
-
-This project is licensed under the [MIT License](LICENSE).
-
-See the [LICENSE](LICENSE) file for the full license text.
+**Author:** Astryxion  
+**Credits:** Astryxion, IVESIRIS  
+**Version:** 1.2.0  
+**License:** [MIT](LICENSE)  
+**URL:** https://github.com/astryxion/MoBends-Reforged

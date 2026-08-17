@@ -20,6 +20,7 @@ public final class HatsCompat {
       try {
          Api.registerHelper(new HatsDisablePlayerHelper());
          Api.registerHelper(new HatsDisableZombieHelper());
+         Api.registerHelper(new HatsDisableSkeletonHelper());
          Api.registerHelper(new HatsDisableSpiderHelper());
          active = true;
          BendsLogger.log("Hats compatibility enabled.", BendsLogger.INFO);

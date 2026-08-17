@@ -24,4 +24,26 @@ public class Color {
       this.b = b;
       this.a = a;
    }
+
+   public Color(int hexValue) {
+      this(fromHex(hexValue));
+   }
+
+   public Color(Color other) {
+      this.r = other.r;
+      this.g = other.g;
+      this.b = other.b;
+      this.a = other.a;
+   }
+
+   public static Color fromHex(int hexValue) {
+      int valueB = hexValue & 255;
+      hexValue >>= 8;
+      int valueG = hexValue & 255;
+      hexValue >>= 8;
+      int valueR = hexValue & 255;
+      hexValue >>= 8;
+      int valueA = hexValue & 255;
+      return new Color(valueR / 255.0F, valueG / 255.0F, valueB / 255.0F, valueA / 255.0F);
+   }
 }

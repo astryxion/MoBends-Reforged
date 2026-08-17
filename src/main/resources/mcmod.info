@@ -2,13 +2,13 @@
 {
   "modid": "mobends",
   "name": "Mo' Bends",
-  "description": "Mo' Bends for 1.7.10 revamped with bug fixes, compatibility, and some 1.12.2 backports",
+  "description": "Mo' Bends for 1.7.10, rebuilt with 1.12.2-style menus, live animation toggles, armor that follows bent limbs, and extra mod compatibility.",
   "version": "${version}",
   "mcversion": "${mcversion}",
-  "url": "",
+  "url": "https://github.com/astryxion/MoBends-Reforged",
   "updateUrl": "",
   "authorList": ["Astryxion"],
-  "credits": "GobBob",
+  "credits": "Astryxion, IVESIRIS",
   "logoFile": "logo.png",
   "screenshots": [],
   "dependencies": []

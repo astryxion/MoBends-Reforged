@@ -3,8 +3,10 @@ package net.gobbob.mobends.client.renderer.entity;
 import com.mojang.authlib.GameProfile;
 import java.util.UUID;
 import net.gobbob.mobends.MoBends;
+import net.gobbob.mobends.client.model.ModelArmorGlue;
 import net.gobbob.mobends.client.model.ModelCustomArmor;
 import net.gobbob.mobends.client.model.entity.ModelBendsPlayer;
+import net.gobbob.mobends.compat.aether.AetherAccessoriesRender;
 import net.gobbob.mobends.compat.skinlayers3d.SkinLayersRender;
 import net.gobbob.mobends.compat.superhero.SuperheroArmorCompat;
 import net.gobbob.mobends.customarmor.CustomArmor;
@@ -15,12 +17,15 @@ import net.minecraft.block.Block;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.AbstractClientPlayer;
 import net.minecraft.client.model.ModelBiped;
+import net.minecraft.client.renderer.ItemRenderer;
 import net.minecraft.client.renderer.RenderBlocks;
+import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.entity.RenderBiped;
 import net.minecraft.client.renderer.entity.RenderPlayer;
 import net.minecraft.client.renderer.tileentity.TileEntitySkullRenderer;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.init.Blocks;
 import net.minecraft.init.Items;
 import net.minecraft.item.EnumAction;
 import net.minecraft.item.Item;
@@ -30,6 +35,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTUtil;
 import net.minecraft.util.EnumChatFormatting;
+import net.minecraft.util.IIcon;
 import net.minecraft.util.MathHelper;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.StringUtils;
@@ -41,6 +47,7 @@ import net.minecraftforge.client.IItemRenderer.ItemRendererHelper;
 import net.minecraftforge.client.event.RenderPlayerEvent;
 import net.minecraftforge.common.MinecraftForge;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL12;
 
 public class RenderBendsPlayer extends RenderPlayer {
    public int refreshModel = 0;
@@ -68,7 +75,7 @@ public class RenderBendsPlayer extends RenderPlayer {
    }
 
    private void ensureModelsFor(AbstractClientPlayer player) {
-      boolean wantVanilla = SuperheroArmorCompat.isWearingSuperheroSuit(player);
+      boolean wantVanilla = SuperheroArmorCompat.isWearingSuperheroSuit(player) || !net.gobbob.mobends.AnimatedEntity.shouldAnimate(player);
       if (wantVanilla != this.usingVanillaModels || this.refreshModel != MoBends.refreshModel) {
          if (wantVanilla) {
             this.applyVanillaModels();
@@ -85,6 +92,15 @@ public class RenderBendsPlayer extends RenderPlayer {
       RenderPlayerEvent.SetArmorModel event = new RenderPlayerEvent.SetArmorModel(p_77032_1_, this, 3 - p_77032_2_, p_77032_3_, itemstack);
       MinecraftForge.EVENT_BUS.post(event);
       if (event.result != -1) {
+         // LOTR special helmets set a vanilla-layout model and skip Forge's armor path.
+         // Glue that model onto Mo' Bends bones or the crest sits a block above the head.
+         if (itemstack != null && this.renderPassModel instanceof ModelBiped) {
+            ResourceLocation texture = RenderBiped.getArmorResource(p_77032_1_, itemstack, p_77032_2_, (String)null);
+            this.bindTexture(texture);
+            ModelBiped modelbiped = this.wrapArmorModel((ModelBiped)this.renderPassModel, itemstack.getItem(), texture, p_77032_2_);
+            this.applyArmorVisibility(modelbiped, p_77032_2_);
+            this.setRenderPassModel(modelbiped);
+         }
          return event.result;
       } else {
          if (itemstack != null) {
@@ -95,21 +111,8 @@ public class RenderBendsPlayer extends RenderPlayer {
                this.bindTexture(texture);
                ModelBiped modelbiped = p_77032_2_ == 2 ? this.modelArmor : this.modelArmorChestplate;
                modelbiped = ForgeHooksClient.getArmorModel(p_77032_1_, itemstack, p_77032_2_, modelbiped);
-               // Fisk / Legends suits keep their own models. Never wrap with CustomArmor.
-               if (!this.usingVanillaModels && !SuperheroArmorCompat.isSuperheroArmorItem(item)) {
-                  modelbiped = CustomArmor.get(modelbiped, texture.getResourcePath(), p_77032_2_ == 2 ? 0.5F : 1.0F).armorModel;
-                  if (modelbiped instanceof ModelCustomArmor && this.modelBipedMain instanceof ModelBendsPlayer) {
-                     ((ModelCustomArmor)modelbiped).setSourceModel((ModelBendsPlayer)this.modelBipedMain);
-                  }
-               }
-
-               modelbiped.bipedHead.showModel = p_77032_2_ == 0;
-               modelbiped.bipedHeadwear.showModel = p_77032_2_ == 0;
-               modelbiped.bipedBody.showModel = p_77032_2_ == 1 || p_77032_2_ == 2;
-               modelbiped.bipedRightArm.showModel = p_77032_2_ == 1;
-               modelbiped.bipedLeftArm.showModel = p_77032_2_ == 1;
-               modelbiped.bipedRightLeg.showModel = p_77032_2_ == 2 || p_77032_2_ == 3;
-               modelbiped.bipedLeftLeg.showModel = p_77032_2_ == 2 || p_77032_2_ == 3;
+               modelbiped = this.wrapArmorModel(modelbiped, item, texture, p_77032_2_);
+               this.applyArmorVisibility(modelbiped, p_77032_2_);
 
                this.setRenderPassModel(modelbiped);
                modelbiped.onGround = this.mainModel.onGround;
@@ -139,6 +142,41 @@ public class RenderBendsPlayer extends RenderPlayer {
 
          return -1;
       }
+   }
+
+   private ModelBiped wrapArmorModel(ModelBiped modelbiped, Item item, ResourceLocation texture, int slot) {
+      if (this.usingVanillaModels || SuperheroArmorCompat.isSuperheroArmorItem(item) || modelbiped == null) {
+         return modelbiped;
+      }
+      if (modelbiped instanceof ModelArmorGlue) {
+         if (this.modelBipedMain instanceof ModelBendsPlayer) {
+            ((ModelArmorGlue) modelbiped).setSourceModel((ModelBendsPlayer) this.modelBipedMain);
+         }
+         return modelbiped;
+      }
+      if (ModelArmorGlue.needsGlue(modelbiped) && this.modelBipedMain instanceof ModelBendsPlayer) {
+         ModelArmorGlue glue = ModelArmorGlue.get(modelbiped);
+         glue.setSourceModel((ModelBendsPlayer) this.modelBipedMain);
+         return glue;
+      }
+      modelbiped = CustomArmor.get(modelbiped, texture.getResourcePath(), slot == 2 ? 0.5F : 1.0F).armorModel;
+      if (modelbiped instanceof ModelCustomArmor && this.modelBipedMain instanceof ModelBendsPlayer) {
+         ((ModelCustomArmor) modelbiped).setSourceModel((ModelBendsPlayer) this.modelBipedMain);
+      }
+      return modelbiped;
+   }
+
+   private void applyArmorVisibility(ModelBiped modelbiped, int slot) {
+      modelbiped.bipedHead.showModel = slot == 0;
+      modelbiped.bipedHeadwear.showModel = slot == 0;
+      modelbiped.bipedBody.showModel = slot == 1 || slot == 2;
+      modelbiped.bipedRightArm.showModel = slot == 1;
+      modelbiped.bipedLeftArm.showModel = slot == 1;
+      modelbiped.bipedRightLeg.showModel = slot == 2 || slot == 3;
+      modelbiped.bipedLeftLeg.showModel = slot == 2 || slot == 3;
+      modelbiped.onGround = this.mainModel.onGround;
+      modelbiped.isRiding = this.mainModel.isRiding;
+      modelbiped.isChild = this.mainModel.isChild;
    }
 
    public void renderFirstPersonArm(EntityPlayer p_82441_1_) {
@@ -399,7 +437,19 @@ public class RenderBendsPlayer extends RenderPlayer {
 
             IItemRenderer customRenderer = MinecraftForgeClient.getItemRenderer(itemstack1, ItemRenderType.EQUIPPED);
             boolean is3D = customRenderer != null && customRenderer.shouldUseRenderHelper(ItemRenderType.EQUIPPED, itemstack1, ItemRendererHelper.BLOCK_3D);
-            if (!is3D && (!(itemstack1.getItem() instanceof ItemBlock) || !RenderBlocks.renderItemIn3d(Block.getBlockFromItem(itemstack1.getItem()).getRenderType()))) {
+            boolean uprightTorch = itemstack1.getItem() == Item.getItemFromBlock(Blocks.torch);
+            if (uprightTorch) {
+               // Don't use ItemRenderer.renderItem — it always applies 50° Y / 335° Z
+               // which re-slants the torch. Draw the sprite directly so it stands up.
+               GL11.glRotatef(90.0F, 1.0F, 0.0F, 0.0F);
+               GL11.glRotatef(180.0F, 0.0F, 1.0F, 0.0F);
+               GL11.glRotatef(180.0F, 0.0F, 0.0F, 1.0F);
+               GL11.glTranslatef(0.0F, 0.4F, 0.0F);
+               float f2 = 0.5625F;
+               GL11.glScalef(f2, f2, f2);
+               GL11.glTranslatef(-0.5F, -0.5F, 0.0F);
+               this.renderUprightHeldTorch(argPlayer, itemstack1);
+            } else if (!is3D && (!(itemstack1.getItem() instanceof ItemBlock) || !RenderBlocks.renderItemIn3d(Block.getBlockFromItem(itemstack1.getItem()).getRenderType()))) {
                if (itemstack1.getItem() == Items.bow) {
                   float f2 = 0.625F;
                   GL11.glTranslatef(0.0F, 0.125F, 0.3125F);
@@ -442,30 +492,45 @@ public class RenderBendsPlayer extends RenderPlayer {
                GL11.glScalef(-f2, -f2, f2);
             }
 
-            if (itemstack1.getItem().requiresMultipleRenderPasses()) {
-               for(int k = 0; k < itemstack1.getItem().getRenderPasses(itemstack1.getItemDamage()); ++k) {
-                  int i = itemstack1.getItem().getColorFromItemStack(itemstack1, k);
-                  float f12 = (float)(i >> 16 & 255) / 255.0F;
-                  float f3 = (float)(i >> 8 & 255) / 255.0F;
-                  float f4 = (float)(i & 255) / 255.0F;
-                  GL11.glColor4f(f12, f3, f4, 1.0F);
-                  this.renderManager.itemRenderer.renderItem(argPlayer, itemstack1, k);
+            if (!uprightTorch) {
+               if (itemstack1.getItem().requiresMultipleRenderPasses()) {
+                  for(int k = 0; k < itemstack1.getItem().getRenderPasses(itemstack1.getItemDamage()); ++k) {
+                     int i = itemstack1.getItem().getColorFromItemStack(itemstack1, k);
+                     float f12 = (float)(i >> 16 & 255) / 255.0F;
+                     float f3 = (float)(i >> 8 & 255) / 255.0F;
+                     float f4 = (float)(i & 255) / 255.0F;
+                     GL11.glColor4f(f12, f3, f4, 1.0F);
+                     this.renderManager.itemRenderer.renderItem(argPlayer, itemstack1, k);
+                  }
+               } else {
+                  int k = itemstack1.getItem().getColorFromItemStack(itemstack1, 0);
+                  float f11 = (float)(k >> 16 & 255) / 255.0F;
+                  float f12 = (float)(k >> 8 & 255) / 255.0F;
+                  float f3 = (float)(k & 255) / 255.0F;
+                  GL11.glColor4f(f11, f12, f3, 1.0F);
+                  this.renderManager.itemRenderer.renderItem(argPlayer, itemstack1, 0);
                }
-            } else {
-               int k = itemstack1.getItem().getColorFromItemStack(itemstack1, 0);
-               float f11 = (float)(k >> 16 & 255) / 255.0F;
-               float f12 = (float)(k >> 8 & 255) / 255.0F;
-               float f3 = (float)(k & 255) / 255.0F;
-               GL11.glColor4f(f11, f12, f3, 1.0F);
-               this.renderManager.itemRenderer.renderItem(argPlayer, itemstack1, 0);
             }
 
             GL11.glPopMatrix();
          }
 
          net.gobbob.mobends.compat.hats.HatsRender.renderPlayerHat(argPlayer, this.modelBipedMain, argPartialTicks);
+         AetherAccessoriesRender.renderPlayerAccessories(argPlayer, this.modelBipedMain, argPartialTicks);
 
          MinecraftForge.EVENT_BUS.post(new RenderPlayerEvent.Specials.Post(argPlayer, this, argPartialTicks));
+      }
+   }
+
+   private void renderUprightHeldTorch(AbstractClientPlayer player, ItemStack stack) {
+      IIcon icon = player.getItemIcon(stack, 0);
+      if (icon != null) {
+         this.bindTexture(this.renderManager.renderEngine.getResourceLocation(stack.getItemSpriteNumber()));
+         GL11.glEnable(GL12.GL_RESCALE_NORMAL);
+         int color = stack.getItem().getColorFromItemStack(stack, 0);
+         GL11.glColor4f((float)(color >> 16 & 255) / 255.0F, (float)(color >> 8 & 255) / 255.0F, (float)(color & 255) / 255.0F, 1.0F);
+         ItemRenderer.renderItemIn2D(Tessellator.instance, icon.getMaxU(), icon.getMinV(), icon.getMinU(), icon.getMaxV(), icon.getIconWidth(), icon.getIconHeight(), 0.0625F);
+         GL11.glDisable(GL12.GL_RESCALE_NORMAL);
       }
    }
 }

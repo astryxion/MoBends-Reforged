@@ -10,7 +10,6 @@ import net.gobbob.mobends.pack.BendsPack;
 import net.gobbob.mobends.pack.BendsVar;
 import net.gobbob.mobends.util.SmoothVector3f;
 import net.gobbob.mobends.util.Quaternion;
-import net.minecraft.block.Block;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.AbstractClientPlayer;
 import net.minecraft.client.model.ModelBiped;
@@ -19,8 +18,8 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Blocks;
-import net.minecraft.item.ItemAxe;
-import net.minecraft.item.ItemPickaxe;
+import net.minecraft.item.EnumAction;
+import net.minecraft.item.Item;
 import net.minecraft.util.MathHelper;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.vector.Vector3f;
@@ -39,6 +38,8 @@ public class ModelBendsPlayer extends ModelBiped {
    public Quaternion centerQuatTarget = new Quaternion();
    public boolean centerQuatActive = false;
    public SmoothVector3f renderItemRotation;
+   /** When set, third-person torch skips vanilla's 60° 2D-item slant so it stands up like 1.12.2. */
+   public boolean torchItemUpright;
    public SwordTrail swordTrail;
    public float headRotationX;
    public float headRotationY;
@@ -193,6 +194,7 @@ public class ModelBendsPlayer extends ModelBiped {
                   data.flightBodyLookYaw = 0.0F;
                }
                this.renderItemRotation.setSmooth(new Vector3f(0.0F, 0.0F, 0.0F), 0.5F);
+               this.torchItemUpright = false;
                // Decay pre_rotation so swim/attack/axe leftovers don't leave arms stuck out
                ((ModelRendererBends)this.bipedHead).pre_rotation.setSmoothZero(0.5F);
                ((ModelRendererBends)this.bipedBody).pre_rotation.setSmoothZero(0.5F);
@@ -256,22 +258,25 @@ public class ModelBendsPlayer extends ModelBiped {
                      AnimatedEntity.getByEntity(argEntity).get("sneak").animate((EntityLivingBase)argEntity, this, Data_Player.get(argEntity.getEntityId()));
                      BendsPack.animate(this, "player", "sneak");
                   }
+
+                  if (!argEntity.isSprinting() && isHoldingTorch((EntityPlayer)argEntity)) {
+                     AnimatedEntity.getByEntity(argEntity).get("torch_holding").animate((EntityLivingBase)argEntity, this, Data_Player.get(argEntity.getEntityId()));
+                     BendsPack.animate(this, "player", "torch_holding");
+                  }
                }
 
-               if (this.aimedBow) {
-                  AnimatedEntity.getByEntity(argEntity).get("bow").animate((EntityLivingBase)argEntity, this, Data_Player.get(argEntity.getEntityId()));
-                  BendsPack.animate(this, "player", "bow");
-               } else if ((((EntityPlayer)argEntity).getCurrentEquippedItem() == null || !(((EntityPlayer)argEntity).getCurrentEquippedItem().getItem() instanceof ItemPickaxe)) && (((EntityPlayer)argEntity).getCurrentEquippedItem() == null || Block.getBlockFromItem(((EntityPlayer)argEntity).getCurrentEquippedItem().getItem()) == Blocks.air)) {
-                  if (((EntityPlayer)argEntity).getCurrentEquippedItem() != null && ((EntityPlayer)argEntity).getCurrentEquippedItem().getItem() instanceof ItemAxe) {
-                     AnimatedEntity.getByEntity(argEntity).get("axe").animate((EntityLivingBase)argEntity, this, Data_Player.get(argEntity.getEntityId()));
-                     BendsPack.animate(this, "player", "axe");
+               if (isEating((EntityPlayer)argEntity)) {
+                  AnimatedEntity.getByEntity(argEntity).get("eating").animate((EntityLivingBase)argEntity, this, Data_Player.get(argEntity.getEntityId()));
+                  BendsPack.animate(this, "player", "eating");
+               } else {
+                  Data_Player.get(argEntity.getEntityId()).eatBringUp = 0.0F;
+                  if (this.aimedBow) {
+                     AnimatedEntity.getByEntity(argEntity).get("bow").animate((EntityLivingBase)argEntity, this, Data_Player.get(argEntity.getEntityId()));
+                     BendsPack.animate(this, "player", "bow");
                   } else {
                      AnimatedEntity.getByEntity(argEntity).get("attack").animate((EntityLivingBase)argEntity, this, Data_Player.get(argEntity.getEntityId()));
                      BendsPack.animate(this, "player", "attack");
                   }
-               } else {
-                  AnimatedEntity.getByEntity(argEntity).get("mining").animate((EntityLivingBase)argEntity, this, Data_Player.get(argEntity.getEntityId()));
-                  BendsPack.animate(this, "player", "mining");
                }
 
                ((ModelRendererBends)this.bipedHead).update(data.ticksPerFrame);
@@ -351,5 +356,17 @@ public class ModelBendsPlayer extends ModelBiped {
          this.renderItemRotation.set(data.renderItemRotation);
       }
 
+   }
+
+   private static boolean isHoldingTorch(EntityPlayer player) {
+      return player.getCurrentEquippedItem() != null && player.getCurrentEquippedItem().getItem() == Item.getItemFromBlock(Blocks.torch);
+   }
+
+   private static boolean isEating(EntityPlayer player) {
+      if (player.getItemInUseCount() <= 0) {
+         return false;
+      } else {
+         return player.getItemInUse() != null && player.getItemInUse().getItemUseAction() == EnumAction.eat;
+      }
    }
 }

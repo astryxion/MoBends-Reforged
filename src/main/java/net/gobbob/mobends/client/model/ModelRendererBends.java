@@ -39,6 +39,13 @@ public class ModelRendererBends extends ModelRenderer {
       this.scaleX = this.scaleY = this.scaleZ = 1.0F;
    }
 
+   public ModelRenderer setTextureOffset(int x, int y) {
+      super.setTextureOffset(x, y);
+      this.txOffsetX = x;
+      this.txOffsetY = y;
+      return this;
+   }
+
    public void updateBends(float argTicksPerFrame) {
       this.rotateAngleX = (float)((double)(this.rotation.getX() / 180.0F) * Math.PI);
       this.rotateAngleY = (float)((double)(this.rotation.getY() / 180.0F) * Math.PI);
@@ -155,38 +162,51 @@ public class ModelRendererBends extends ModelRenderer {
       super.renderWithRotation(p_78791_1_);
    }
 
+   /**
+    * Applies this bone's own transform without {@link ModelRendererBends_SeperatedChild}'s
+    * mother/forearm chain. Used to glue vanilla-layout armor onto the upper arm.
+    */
+   public void postRenderSelf(float scale) {
+      this.updateBends(scale);
+      this.applyPostRenderTransform(scale);
+   }
+
    public void postRender(float p_78794_1_) {
       this.updateBends(p_78794_1_);
       if (!this.isHidden && this.showModel) {
-         if (this.rotateAngleX == 0.0F && this.rotateAngleY == 0.0F && this.rotateAngleZ == 0.0F) {
-            if (this.rotationPointX != 0.0F || this.rotationPointY != 0.0F || this.rotationPointZ != 0.0F) {
-               GL11.glTranslatef(this.rotationPointX * p_78794_1_, this.rotationPointY * p_78794_1_, this.rotationPointZ * p_78794_1_);
-               GL11.glRotatef(-this.pre_rotation.getY(), 0.0F, 1.0F, 0.0F);
-               GL11.glRotatef(this.pre_rotation.getX(), 1.0F, 0.0F, 0.0F);
-               GL11.glRotatef(this.pre_rotation.getZ(), 0.0F, 0.0F, 1.0F);
-               GL11.glScalef(this.scaleX, this.scaleY, this.scaleZ);
-            }
-         } else {
-            GL11.glTranslatef(this.rotationPointX * p_78794_1_, this.rotationPointY * p_78794_1_, this.rotationPointZ * p_78794_1_);
+         this.applyPostRenderTransform(p_78794_1_);
+      }
+
+   }
+
+   private void applyPostRenderTransform(float scale) {
+      if (this.rotateAngleX == 0.0F && this.rotateAngleY == 0.0F && this.rotateAngleZ == 0.0F) {
+         if (this.rotationPointX != 0.0F || this.rotationPointY != 0.0F || this.rotationPointZ != 0.0F) {
+            GL11.glTranslatef(this.rotationPointX * scale, this.rotationPointY * scale, this.rotationPointZ * scale);
             GL11.glRotatef(-this.pre_rotation.getY(), 0.0F, 1.0F, 0.0F);
             GL11.glRotatef(this.pre_rotation.getX(), 1.0F, 0.0F, 0.0F);
             GL11.glRotatef(this.pre_rotation.getZ(), 0.0F, 0.0F, 1.0F);
-            if (this.rotateAngleZ != 0.0F) {
-               GL11.glRotatef(this.rotateAngleZ * (180F / (float)Math.PI), 0.0F, 0.0F, 1.0F);
-            }
-
-            if (this.rotateAngleY != 0.0F) {
-               GL11.glRotatef(this.rotateAngleY * (180F / (float)Math.PI), 0.0F, 1.0F, 0.0F);
-            }
-
-            if (this.rotateAngleX != 0.0F) {
-               GL11.glRotatef(this.rotateAngleX * (180F / (float)Math.PI), 1.0F, 0.0F, 0.0F);
-            }
-
             GL11.glScalef(this.scaleX, this.scaleY, this.scaleZ);
          }
-      }
+      } else {
+         GL11.glTranslatef(this.rotationPointX * scale, this.rotationPointY * scale, this.rotationPointZ * scale);
+         GL11.glRotatef(-this.pre_rotation.getY(), 0.0F, 1.0F, 0.0F);
+         GL11.glRotatef(this.pre_rotation.getX(), 1.0F, 0.0F, 0.0F);
+         GL11.glRotatef(this.pre_rotation.getZ(), 0.0F, 0.0F, 1.0F);
+         if (this.rotateAngleZ != 0.0F) {
+            GL11.glRotatef(this.rotateAngleZ * (180F / (float)Math.PI), 0.0F, 0.0F, 1.0F);
+         }
 
+         if (this.rotateAngleY != 0.0F) {
+            GL11.glRotatef(this.rotateAngleY * (180F / (float)Math.PI), 0.0F, 1.0F, 0.0F);
+         }
+
+         if (this.rotateAngleX != 0.0F) {
+            GL11.glRotatef(this.rotateAngleX * (180F / (float)Math.PI), 1.0F, 0.0F, 0.0F);
+         }
+
+         GL11.glScalef(this.scaleX, this.scaleY, this.scaleZ);
+      }
    }
 
    public ModelRendererBends setPosition(float argX, float argY, float argZ) {

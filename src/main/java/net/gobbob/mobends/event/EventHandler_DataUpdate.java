@@ -1,12 +1,16 @@
 package net.gobbob.mobends.event;
 
+import cpw.mods.fml.client.config.GuiConfig;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
+import net.gobbob.mobends.MoBends;
 import net.gobbob.mobends.client.renderer.entity.ArrowTrailManager;
 import net.gobbob.mobends.client.renderer.entity.RenderBendsArrow;
 import net.gobbob.mobends.client.renderer.entity.RenderBendsPlayer;
 import net.gobbob.mobends.data.Data_Player;
+import net.gobbob.mobends.data.Data_Skeleton;
 import net.gobbob.mobends.data.Data_Spider;
+import net.gobbob.mobends.data.Data_Squid;
 import net.gobbob.mobends.data.Data_Zombie;
 import net.gobbob.mobends.settings.SettingsBoolean;
 import net.gobbob.mobends.settings.SettingsNode;
@@ -22,9 +26,11 @@ import org.lwjgl.util.vector.Vector3f;
 public class EventHandler_DataUpdate {
    private static float ticks = 0.0F;
    public static float ticksPerFrame = 0.0F;
+   public static float partialTicks = 0.0F;
 
    @SubscribeEvent
    public void updateAnimations(TickEvent.RenderTickEvent event) {
+      partialTicks = event.renderTickTime;
       if (Minecraft.getMinecraft().theWorld != null) {
          if (Minecraft.getMinecraft().thePlayer != null && !Minecraft.getMinecraft().isGamePaused()) {
             float newTicks = (float)Minecraft.getMinecraft().thePlayer.ticksExisted + event.renderTickTime;
@@ -49,8 +55,16 @@ public class EventHandler_DataUpdate {
             ((Data_Zombie)Data_Zombie.dataList.get(i)).update(event.renderTickTime);
          }
 
+         for(int i = 0; i < Data_Skeleton.dataList.size(); ++i) {
+            ((Data_Skeleton)Data_Skeleton.dataList.get(i)).update(event.renderTickTime);
+         }
+
          for(int i = 0; i < Data_Spider.dataList.size(); ++i) {
             ((Data_Spider)Data_Spider.dataList.get(i)).update(event.renderTickTime);
+         }
+
+         for(int i = 0; i < Data_Squid.dataList.size(); ++i) {
+            ((Data_Squid)Data_Squid.dataList.get(i)).update(event.renderTickTime);
          }
 
       }
@@ -58,6 +72,10 @@ public class EventHandler_DataUpdate {
 
    @SubscribeEvent
    public void onClientTick(TickEvent.ClientTickEvent event) {
+      if (event.phase == TickEvent.Phase.END && !(Minecraft.getMinecraft().currentScreen instanceof GuiConfig)) {
+         MoBends.reloadConfigIfFileChanged();
+      }
+
       if (Minecraft.getMinecraft().theWorld != null) {
          if (!(RenderManager.instance.entityRenderMap.get(EntityPlayer.class) instanceof RenderBendsPlayer)) {
             Render render = new RenderBendsPlayer();
@@ -113,6 +131,27 @@ public class EventHandler_DataUpdate {
             }
          }
 
+         for(int i = 0; i < Data_Skeleton.dataList.size(); ++i) {
+            Data_Skeleton data = (Data_Skeleton)Data_Skeleton.dataList.get(i);
+            Entity entity = Minecraft.getMinecraft().theWorld.getEntityByID(data.entityID);
+            if (entity != null) {
+               if (!data.entityType.equalsIgnoreCase(entity.getCommandSenderName())) {
+                  Data_Skeleton.dataList.remove(data);
+                  Data_Skeleton.add(new Data_Skeleton(entity.getEntityId()));
+                  BendsLogger.log("Reset entity", BendsLogger.DEBUG);
+               } else {
+                  data.motion_prev.set(data.motion);
+                  data.motion.x = (float)entity.posX - data.position.x;
+                  data.motion.y = (float)entity.posY - data.position.y;
+                  data.motion.z = (float)entity.posZ - data.position.z;
+                  data.position = new Vector3f((float)entity.posX, (float)entity.posY, (float)entity.posZ);
+               }
+            } else {
+               Data_Skeleton.dataList.remove(data);
+               BendsLogger.log("No entity", BendsLogger.DEBUG);
+            }
+         }
+
          for(int i = 0; i < Data_Spider.dataList.size(); ++i) {
             Data_Spider data = (Data_Spider)Data_Spider.dataList.get(i);
             Entity entity = Minecraft.getMinecraft().theWorld.getEntityByID(data.entityID);
@@ -127,9 +166,31 @@ public class EventHandler_DataUpdate {
                   data.motion.y = (float)entity.posY - data.position.y;
                   data.motion.z = (float)entity.posZ - data.position.z;
                   data.position = new Vector3f((float)entity.posX, (float)entity.posY, (float)entity.posZ);
+                  data.updateLimbs();
                }
             } else {
                Data_Spider.dataList.remove(data);
+               BendsLogger.log("No entity", BendsLogger.DEBUG);
+            }
+         }
+
+         for(int i = 0; i < Data_Squid.dataList.size(); ++i) {
+            Data_Squid data = (Data_Squid)Data_Squid.dataList.get(i);
+            Entity entity = Minecraft.getMinecraft().theWorld.getEntityByID(data.entityID);
+            if (entity != null) {
+               if (!data.entityType.equalsIgnoreCase(entity.getCommandSenderName())) {
+                  Data_Squid.dataList.remove(data);
+                  Data_Squid.add(new Data_Squid(entity.getEntityId()));
+                  BendsLogger.log("Reset entity", BendsLogger.DEBUG);
+               } else {
+                  data.motion_prev.set(data.motion);
+                  data.motion.x = (float)entity.posX - data.position.x;
+                  data.motion.y = (float)entity.posY - data.position.y;
+                  data.motion.z = (float)entity.posZ - data.position.z;
+                  data.position = new Vector3f((float)entity.posX, (float)entity.posY, (float)entity.posZ);
+               }
+            } else {
+               Data_Squid.dataList.remove(data);
                BendsLogger.log("No entity", BendsLogger.DEBUG);
             }
          }

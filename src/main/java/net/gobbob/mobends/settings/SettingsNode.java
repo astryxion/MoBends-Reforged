@@ -6,7 +6,7 @@ public abstract class SettingsNode {
          (new SettingsBoolean("arrowTrail", "Arrow Trail")).setupDefault(true),
          (new SettingsBoolean("sprintFlyBoost", "Sprint Fly Boost")).setupDefault(true),
          (new SettingsBoolean("sprintSwimBoost", "Sprint Swim Boost")).setupDefault(true),
-         new SettingsBoolean("dummy", "Dummy")
+         (new SettingsBoolean("spinAttack", "Spin Attack")).setupDefault(true)
    };
    public String id;
    public String displayName;

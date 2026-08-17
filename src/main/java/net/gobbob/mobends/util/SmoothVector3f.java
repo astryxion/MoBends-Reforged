@@ -91,6 +91,19 @@ public class SmoothVector3f {
       this.smoothness.x = argSmooth;
    }
 
+   /**
+    * Always retarget X from the current smoothed value, even if the destination is
+    * unchanged. 1.12.2 {@code SmoothOrientation.orient()} resets progress every frame
+    * so the pose exponentially approaches the target instead of linearly finishing
+    * at rest (which made squid tentacles snap straight between pulses).
+    */
+   public void chaseX(float argX, float argSmooth) {
+      this.vOld.x = this.vSmooth.x;
+      this.vFinal.x = argX;
+      this.completion.x = 0.0F;
+      this.smoothness.x = argSmooth;
+   }
+
    public void setSmoothY(float argY, float argSmooth) {
       if (this.vFinal.y != argY) {
          this.vFinal.y = argY;

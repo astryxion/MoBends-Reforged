@@ -4,7 +4,7 @@ import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.InputEvent;
 import java.io.IOException;
 import net.gobbob.mobends.MoBends;
-import net.gobbob.mobends.client.gui.GuiMBMenu;
+import net.gobbob.mobends.client.gui.GuiBendsMenu;
 import net.gobbob.mobends.pack.BendsPack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.settings.KeyBinding;
@@ -15,7 +15,7 @@ public class EventHandler_Keyboard {
    @SubscribeEvent
    public void onKeyPressed(InputEvent.KeyInputEvent event) throws IOException {
       if (key_Menu.getIsKeyPressed()) {
-         Minecraft.getMinecraft().displayGuiScreen(new GuiMBMenu());
+         Minecraft.getMinecraft().displayGuiScreen(new GuiBendsMenu());
          ++MoBends.refreshModel;
          BendsPack.initPacks();
       }

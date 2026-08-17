@@ -5,6 +5,8 @@ import java.util.List;
 import net.gobbob.mobends.client.model.ModelRendererBends;
 import net.gobbob.mobends.client.model.entity.ModelBendsPlayer;
 import net.gobbob.mobends.client.renderer.SwordTrail;
+import net.gobbob.mobends.settings.SettingsBoolean;
+import net.gobbob.mobends.settings.SettingsNode;
 import net.gobbob.mobends.util.SmoothVector3f;
 import net.gobbob.mobends.util.Quaternion;
 import net.minecraft.block.Block;
@@ -49,6 +51,8 @@ public class Data_Player extends EntityData {
    public boolean jumpPoseInitialized = false;
    public float capeWavePhase = 0.0F;
    public float capeWaveSpeed = 1.0F;
+   /** 1.12.2 EatingAnimationBit bring-up progress (0-1). */
+   public float eatBringUp = 0.0F;
 
    public Data_Player(int argEntityID) {
       super(argEntityID);
@@ -277,22 +281,24 @@ public class Data_Player extends EntityData {
 
    public void onPunch() {
       if (this.getEntity().getHeldItem() != null) {
-         if (this.ticksAfterPunch > 6.0F) {
-            if (this.currentAttack == 0) {
-               this.currentAttack = 1;
-               this.ticksAfterPunch = 0.0F;
-            } else if (this.ticksAfterPunch < 15.0F) {
-               if (this.currentAttack == 1) {
-                  this.currentAttack = 2;
-               } else if (this.currentAttack == 2) {
-                  this.currentAttack = this.getEntity().isRiding() ? 1 : 3;
-               } else if (this.currentAttack == 3) {
-                  this.currentAttack = 1;
-               }
-
-               this.ticksAfterPunch = 0.0F;
-            }
+         if (this.ticksAfterPunch <= 6.0F) {
+            return;
          }
+
+         if (this.currentAttack == 1) {
+            this.currentAttack = 2;
+         } else if (this.currentAttack == 2) {
+            this.currentAttack = 3;
+         } else if (this.currentAttack == 3) {
+            this.currentAttack = 4;
+         } else if (this.currentAttack == 4) {
+            boolean spin = ((SettingsBoolean)SettingsNode.getSetting("spinAttack")).data;
+            this.currentAttack = !spin || this.getEntity().isRiding() ? 1 : 5;
+         } else {
+            this.currentAttack = 1;
+         }
+
+         this.ticksAfterPunch = 0.0F;
       } else {
          this.fistPunchArm = !this.fistPunchArm;
          this.ticksAfterPunch = 0.0F;
