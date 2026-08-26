@@ -1,0 +1,1945 @@
+package goblinbob.mobends.standard.mutators;
+
+import com.mojang.blaze3d.matrix.MatrixStack;
+import com.mojang.blaze3d.vertex.IVertexBuilder;
+import goblinbob.mobends.core.client.MoBendsRenderContext;
+import goblinbob.mobends.core.client.model.BendsMesh;
+import goblinbob.mobends.core.client.model.BendsModelPart;
+import goblinbob.mobends.core.client.model.BoxSide;
+import goblinbob.mobends.core.client.model.ModelPartTransform;
+import goblinbob.mobends.core.data.IEntityDataFactory;
+import goblinbob.mobends.lib.math.Quaternion;
+import goblinbob.mobends.core.mutators.Mutator;
+import goblinbob.mobends.standard.client.model.adaptive.AdaptiveHumanoidGeometry;
+import goblinbob.mobends.standard.client.model.adaptive.HumanoidLayout;
+import goblinbob.mobends.standard.client.model.adaptive.PartCapture;
+import goblinbob.mobends.standard.client.renderer.entity.layers.LayerCustomBipedArmor;
+import goblinbob.mobends.standard.client.renderer.entity.layers.LayerCustomHeldItem;
+import goblinbob.mobends.core.client.model.IModelRendererExt;
+import goblinbob.mobends.standard.data.BipedEntityData;
+import net.minecraft.client.renderer.entity.model.EntityModel;
+import net.minecraft.client.renderer.entity.model.BipedModel;
+import net.minecraft.client.renderer.model.ModelRenderer;
+import net.minecraft.client.renderer.entity.LivingRenderer;
+import net.minecraft.client.renderer.entity.layers.HeadLayer;
+import net.minecraft.client.renderer.entity.layers.BipedArmorLayer;
+import net.minecraft.client.renderer.entity.layers.HeldItemLayer;
+import net.minecraft.client.renderer.entity.layers.LayerRenderer;
+import net.minecraft.entity.LivingEntity;
+
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+public abstract class BipedMutator<D extends BipedEntityData<E>,
+                                   E extends LivingEntity,
+                                   M extends EntityModel<E>>
+                                  extends Mutator<D, E, M>
+{
+    private static final org.apache.logging.log4j.Logger LOGGER =
+            org.apache.logging.log4j.LogManager.getLogger("MoBends-BipedMutator");
+
+    protected BendsModelPart body;
+    protected BendsModelPart head;
+    protected BendsModelPart headwear;
+    protected BendsModelPart leftArm;
+    protected BendsModelPart rightArm;
+    protected BendsModelPart leftForeArm;
+    protected BendsModelPart rightForeArm;
+    protected BendsModelPart leftLeg;
+    protected BendsModelPart rightLeg;
+    protected BendsModelPart leftForeLeg;
+    protected BendsModelPart rightForeLeg;
+
+    protected BendsModelPart outerBody;
+    protected BendsModelPart outerHead;
+    protected BendsModelPart outerLeftArm;
+    protected BendsModelPart outerRightArm;
+    protected BendsModelPart outerLeftForeArm;
+    protected BendsModelPart outerRightForeArm;
+    protected BendsModelPart outerLeftLeg;
+    protected BendsModelPart outerRightLeg;
+    protected BendsModelPart outerLeftForeLeg;
+    protected BendsModelPart outerRightForeLeg;
+
+    protected final List<AttachedPart> attachedParts = new ArrayList<>();
+
+    protected AdaptiveHumanoidGeometry adaptiveGeometry;
+
+    private boolean adaptivePivotsResolved = false;
+
+    private final Set<BipedModel<?>> overlayModels =
+            Collections.newSetFromMap(new IdentityHashMap<>());
+
+    private static final Map<BipedModel<?>, AdaptiveHumanoidGeometry> overlayGeometry =
+            new IdentityHashMap<>();
+
+    private boolean overlayModelsResolved = false;
+
+    private static final int MAX_CACHED_OVERLAY_GEOMETRY = 128;
+
+    private Set<ModelRenderer> overlayRenderedParts = null;
+
+    private final float[] scratchVec = new float[3];
+    private final float[] scratchPivot = new float[3];
+    private final float[] scratchEuler = new float[3];
+    private final Quaternion scratchRotation = new Quaternion();
+    private final Quaternion adoptedRotation = new Quaternion();
+    private final Quaternion adoptedBodyRotation = new Quaternion();
+    private final Quaternion adoptedParentInverse = new Quaternion();
+    private final goblinbob.mobends.lib.math.SmoothOrientation adoptedOrientation =
+            new goblinbob.mobends.lib.math.SmoothOrientation();
+
+    private BipedModel<?> overlayRenderedModel = null;
+
+    private final net.minecraft.util.math.vector.Matrix4f mainRenderPose = new net.minecraft.util.math.vector.Matrix4f();
+    private final net.minecraft.util.math.vector.Matrix3f mainRenderNormal = new net.minecraft.util.math.vector.Matrix3f();
+    private boolean mainRenderPoseValid = false;
+
+    private final net.minecraft.util.math.vector.Matrix4f renderAnchorPose = new net.minecraft.util.math.vector.Matrix4f();
+    private boolean renderAnchorPoseValid = false;
+
+    protected float babyHeadScale = 1.0F;
+
+    protected ModelRenderer vanillaBody;
+    protected ModelRenderer vanillaHead;
+    protected ModelRenderer vanillaHat;
+    protected ModelRenderer vanillaLeftArm;
+    protected ModelRenderer vanillaRightArm;
+    protected ModelRenderer vanillaLeftLeg;
+    protected ModelRenderer vanillaRightLeg;
+
+    private VanillaPartState vanillaBodyState;
+    private VanillaPartState vanillaHeadState;
+    private VanillaPartState vanillaHatState;
+    private VanillaPartState vanillaLeftArmState;
+    private VanillaPartState vanillaRightArmState;
+    private VanillaPartState vanillaLeftLegState;
+    private VanillaPartState vanillaRightLegState;
+
+    @SuppressWarnings("rawtypes")
+    protected LayerCustomBipedArmor layerArmor;
+    @SuppressWarnings("rawtypes")
+    protected BipedArmorLayer layerArmorVanilla;
+    protected LayerCustomHeldItem<E, M> layerHeldItem;
+    @SuppressWarnings("rawtypes")
+    protected HeldItemLayer layerHeldItemVanilla;
+    @SuppressWarnings("rawtypes")
+    protected HeadLayer layerCustomHead;
+    @SuppressWarnings("rawtypes")
+    protected HeadLayer layerCustomHeadVanilla;
+
+    public BipedMutator(IEntityDataFactory<E> dataFactory)
+    {
+        super(dataFactory);
+    }
+
+    public BipedModel<?> humanoidViewOf(EntityModel<?> model)
+    {
+        return model instanceof BipedModel<?> ? (BipedModel<?>) model : null;
+    }
+
+    @Override
+    public void storeVanillaModel(M model)
+    {
+        final BipedModel<?> view = humanoidViewOf(model);
+        if (view == null)
+            return;
+
+        this.vanillaBody = view.body;
+        this.vanillaHead = view.head;
+        this.vanillaHat = view.hat;
+        this.vanillaLeftArm = view.leftArm;
+        this.vanillaRightArm = view.rightArm;
+        this.vanillaLeftLeg = view.leftLeg;
+        this.vanillaRightLeg = view.rightLeg;
+
+        this.vanillaBodyState = VanillaPartState.capture(view.body);
+        this.vanillaHeadState = VanillaPartState.capture(view.head);
+        this.vanillaHatState = VanillaPartState.capture(view.hat);
+        this.vanillaLeftArmState = VanillaPartState.capture(view.leftArm);
+        this.vanillaRightArmState = VanillaPartState.capture(view.rightArm);
+        this.vanillaLeftLegState = VanillaPartState.capture(view.leftLeg);
+        this.vanillaRightLegState = VanillaPartState.capture(view.rightLeg);
+    }
+
+    @Override
+    public void applyVanillaModel(M model)
+    {
+        if (model == null)
+            return;
+
+        final BipedModel<?> view = humanoidViewOf(model);
+        if (view == null)
+            return;
+
+        VanillaPartState.restore(this.vanillaBodyState, view.body);
+        VanillaPartState.restore(this.vanillaHeadState, view.head);
+        VanillaPartState.restore(this.vanillaHatState, view.hat);
+        VanillaPartState.restore(this.vanillaLeftArmState, view.leftArm);
+        VanillaPartState.restore(this.vanillaRightArmState, view.rightArm);
+        VanillaPartState.restore(this.vanillaLeftLegState, view.leftLeg);
+        VanillaPartState.restore(this.vanillaRightLegState, view.rightLeg);
+
+        this.vanillaPositionsStored = false;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public void swapLayer(LivingRenderer<E, M> renderer, int index, boolean isModelVanilla)
+    {
+        LayerRenderer<E, M> layer = layerRenderers.get(index);
+        if (layer instanceof BipedArmorLayer)
+        {
+            BipedArmorLayer vanillaArmor = (BipedArmorLayer) layer;
+            if (isModelVanilla)
+                this.layerArmorVanilla = vanillaArmor;
+
+            this.layerArmor = new LayerCustomBipedArmor(renderer, this);
+            this.layerArmor.setVanillaArmorLayer(vanillaArmor);
+
+            try
+            {
+                BipedModel<?> innerModel = new BipedModel<>(0.5F);
+                BipedModel<?> outerModel = new BipedModel<>(1.0F);
+
+                this.layerArmor.setArmorModels(innerModel, outerModel);
+            }
+            catch (Exception e)
+            {
+                LOGGER.error("Failed to bake the armor models for {}; armor will not render",
+                        renderer.getClass().getName(), e);
+            }
+
+            layerRenderers.set(index, this.layerArmor);
+        }
+        else if (layer instanceof HeldItemLayer)
+        {
+            this.layerHeldItem = new LayerCustomHeldItem<>(renderer, this);
+            if (isModelVanilla)
+                this.layerHeldItemVanilla = (HeldItemLayer) layer;
+            layerRenderers.set(index, this.layerHeldItem);
+        }
+        else if (layer instanceof HeadLayer)
+        {
+            if (isModelVanilla)
+                this.layerCustomHeadVanilla = (HeadLayer) layer;
+        }
+    }
+
+    @Override
+    public void deswapLayer(LivingRenderer<E, M> renderer, int index)
+    {
+        LayerRenderer<E, M> layer = layerRenderers.get(index);
+        if (layer instanceof LayerCustomBipedArmor && this.layerArmorVanilla != null)
+        {
+            layerRenderers.set(index, this.layerArmorVanilla);
+        }
+        else if (layer instanceof LayerCustomHeldItem && this.layerHeldItemVanilla != null)
+        {
+            layerRenderers.set(index, this.layerHeldItemVanilla);
+        }
+        else if (layer == this.layerCustomHead && this.layerCustomHeadVanilla != null)
+        {
+            layerRenderers.set(index, this.layerCustomHeadVanilla);
+        }
+    }
+
+    protected void createHeadParts(float scaleFactor)
+    {
+        head = new BendsModelPart(0, 0)
+                .setTextureSize(64, 64)
+                .setPosition(0.0F, -12.0F, 0.0F);
+        head.addCube(-4.0F, -8.0F, -4.0F, 8, 8, 8, scaleFactor);
+        body.addChild(head);
+
+        headwear = new BendsModelPart(32, 0)
+                .setTextureSize(64, 64);
+        headwear.addCube(-4.0F, -8.0F, -4.0F, 8, 8, 8, scaleFactor + 0.5F);
+        head.addChild(headwear);
+    }
+
+    protected void createOuterHeadParts(float scaleFactor, float outerOffset)
+    {
+        outerHead = new BendsModelPart(0, 0)
+                .setTextureSize(64, 64)
+                .setPosition(0.0F, -12.0F, 0.0F);
+        outerHead.addCube(-4.0F, -8.0F, -4.0F, 8, 8, 8, scaleFactor + outerOffset);
+        outerBody.addChild(outerHead);
+    }
+
+    protected boolean usesAdaptiveGeometry()
+    {
+        return true;
+    }
+
+    protected AdaptiveHumanoidGeometry.WearParts adaptiveWearParts(M original)
+    {
+        return null;
+    }
+
+    protected AdaptiveHumanoidGeometry.CaptureMode adaptiveHeadCaptureMode()
+    {
+        return AdaptiveHumanoidGeometry.CaptureMode.OWN_CUBES;
+    }
+
+    protected AdaptiveHumanoidGeometry.CaptureMode adaptiveLimbCaptureMode()
+    {
+        return AdaptiveHumanoidGeometry.CaptureMode.OWN_CUBES;
+    }
+
+    protected void createAdaptiveWearParts(AdaptiveHumanoidGeometry geometry)
+    {
+    }
+
+    protected boolean tryCreateAdaptiveParts(M original, HumanoidLayout... baselines)
+    {
+        this.adaptiveGeometry = null;
+        this.adaptivePivotsResolved = false;
+
+        if (original == null || !usesAdaptiveGeometry())
+        {
+            return false;
+        }
+
+        final BipedModel<?> view = humanoidViewOf(original);
+        if (view == null)
+        {
+            return false;
+        }
+
+        for (HumanoidLayout baseline : baselines)
+        {
+            if (baseline.describes(view))
+            {
+                return false;
+            }
+        }
+
+        final AdaptiveHumanoidGeometry geometry = AdaptiveHumanoidGeometry.build(view,
+                adaptiveHeadCaptureMode(), adaptiveLimbCaptureMode(), null,
+                adaptiveWearParts(original));
+        if (geometry == null)
+        {
+            return false;
+        }
+
+        body = boneAt(geometry.bodyPivot).addMesh(geometry.bodyMesh);
+
+        head = boneAt(geometry.headPivot).addMesh(geometry.headMesh);
+        body.addChild(head);
+
+        headwear = new BendsModelPart().addMesh(geometry.hatMesh);
+        head.addChild(headwear);
+
+        leftArm = boneAt(geometry.leftArmPivot).addMesh(geometry.leftArmMesh);
+        body.addChild(leftArm);
+        leftForeArm = boneAt(geometry.leftForeArmPivot).addMesh(geometry.leftForeArmMesh);
+        leftArm.addChild(leftForeArm);
+
+        rightArm = boneAt(geometry.rightArmPivot).addMesh(geometry.rightArmMesh);
+        body.addChild(rightArm);
+        rightForeArm = boneAt(geometry.rightForeArmPivot).addMesh(geometry.rightForeArmMesh);
+        rightArm.addChild(rightForeArm);
+
+        leftLeg = boneAt(geometry.leftLegPivot).addMesh(geometry.leftLegMesh);
+        leftForeLeg = boneAt(geometry.leftForeLegPivot).addMesh(geometry.leftForeLegMesh);
+        leftLeg.addChild(leftForeLeg);
+
+        rightLeg = boneAt(geometry.rightLegPivot).addMesh(geometry.rightLegMesh);
+        rightForeLeg = boneAt(geometry.rightForeLegPivot).addMesh(geometry.rightForeLegMesh);
+        rightLeg.addChild(rightForeLeg);
+
+        outerBody = null;
+        outerHead = null;
+        outerLeftArm = null;
+        outerRightArm = null;
+        outerLeftForeArm = null;
+        outerRightForeArm = null;
+        outerLeftLeg = null;
+        outerRightLeg = null;
+        outerLeftForeLeg = null;
+        outerRightForeLeg = null;
+
+        this.adaptiveGeometry = geometry;
+
+        createAdaptiveWearParts(geometry);
+
+        reconcileWithVanillaModel(view);
+
+        return true;
+    }
+
+    private static BendsModelPart boneAt(float[] pivot)
+    {
+        return new BendsModelPart().setPosition(pivot[0], pivot[1], pivot[2]);
+    }
+
+    protected void reconcileWithVanillaModel(BipedModel<?> original)
+    {
+        attachedParts.clear();
+        overlayModels.clear();
+        overlayModelsResolved = false;
+
+        if (original == null || body == null)
+        {
+            return;
+        }
+
+        final float[] bodyAnchor = {body.position.x, body.position.y, body.position.z};
+        final float[] headAnchor = childAnchor(bodyAnchor, head);
+
+        if (limbSubtreesBaked())
+        {
+            attachChildrenUnderBone(original.head, head);
+        }
+        else
+        {
+            attach(original.head, original.head, head, headAnchor);
+        }
+
+        if (limbSubtreesBaked())
+        {
+            attachChildrenUnderBone(original.hat, headwear != null ? headwear : head);
+        }
+        else
+        {
+            attach(original.hat, original.head, head, headAnchor);
+            attach(original.body, original.body, body, bodyAnchor);
+            attach(original.leftArm, original.leftArm, leftArm, childAnchor(bodyAnchor, leftArm));
+            attach(original.rightArm, original.rightArm, rightArm, childAnchor(bodyAnchor, rightArm));
+            attach(original.leftLeg, original.leftLeg, leftLeg, rootAnchor(leftLeg));
+            attach(original.rightLeg, original.rightLeg, rightLeg, rootAnchor(rightLeg));
+        }
+
+        if (headwear != null && adaptiveGeometry == null
+                && PartCapture.ofOwnCubes(original.hat).isEmpty())
+        {
+            headwear.hidden = true;
+        }
+
+    }
+
+    protected void attachChildrenUnderBone(ModelRenderer source, BendsModelPart bone)
+    {
+        if (source == null || bone == null)
+        {
+            return;
+        }
+
+        attachedParts.add(new AttachedPart(source, bone, 0.0F, 0.0F, 0.0F,
+                !bone.hasGeometry(), true));
+    }
+
+    protected boolean limbSubtreesBaked()
+    {
+        return adaptiveGeometry != null && adaptiveGeometry.limbSubtreesBaked;
+    }
+
+    protected static float[] childAnchor(float[] parentAnchor, BendsModelPart bone)
+    {
+        if (bone == null)
+        {
+            return null;
+        }
+        return new float[] {
+                parentAnchor[0] + bone.position.x,
+                parentAnchor[1] + bone.position.y,
+                parentAnchor[2] + bone.position.z
+        };
+    }
+
+    protected static float[] rootAnchor(BendsModelPart bone)
+    {
+        if (bone == null)
+        {
+            return null;
+        }
+        return new float[] {bone.position.x, bone.position.y, bone.position.z};
+    }
+
+    protected void attach(ModelRenderer source, ModelRenderer anchorSource, BendsModelPart bone, float[] boneAnchor)
+    {
+        if (source == null || anchorSource == null || bone == null || boneAnchor == null)
+        {
+            return;
+        }
+
+        final boolean drawOwnCubes = !bone.hasGeometry();
+
+        if (IModelRendererExt.of(source).mobends$getChildren().isEmpty() && !drawOwnCubes)
+        {
+            return;
+        }
+
+        attachedParts.add(new AttachedPart(source, bone,
+                anchorSource.x - boneAnchor[0],
+                anchorSource.y - boneAnchor[1],
+                anchorSource.z - boneAnchor[2],
+                drawOwnCubes));
+    }
+
+    @Override
+    public boolean createParts(M original, float scaleFactor)
+    {
+        if (tryCreateAdaptiveParts(original, HumanoidLayout.ZOMBIE))
+        {
+            return true;
+        }
+
+        body = new BendsModelPart(16, 16)
+                .setTextureSize(64, 64)
+                .setPosition(0.0F, 12.0F, 0.0F);
+        body.addCube(-4.0F, -12.0F, -2.0F, 8, 12, 4, scaleFactor);
+
+        createHeadParts(scaleFactor);
+
+        int armWidth = 4;
+        float armY = -10F;
+
+        leftArm = new BendsModelPart(40, 16)
+                .setTextureSize(64, 64)
+                .setPosition(5.0F, armY, 0.0F)
+                .setMirror(true);
+        leftArm.developBox(-1.0F, -2.0F, -2.0F, armWidth, 6, 4, scaleFactor)
+                .inflate(0.01F, 0F, 0.01F)
+                .hideFace(BoxSide.BOTTOM)
+                .create();
+        body.addChild(leftArm);
+
+        rightArm = new BendsModelPart(40, 16)
+                .setTextureSize(64, 64)
+                .setPosition(-5.0F, armY, 0.0F);
+        rightArm.developBox(-armWidth + 1, -2.0F, -2.0F, armWidth, 6, 4, scaleFactor)
+                .inflate(0.01F, 0F, 0.01F)
+                .hideFace(BoxSide.BOTTOM)
+                .create();
+        body.addChild(rightArm);
+
+        leftForeArm = new BendsModelPart(40, 22)
+                .setTextureSize(64, 64)
+                .setPosition(0.0F, 4.0F, 2.0F)
+                .setMirror(true);
+        leftForeArm.developBox(-1.0F, 0.0F, -4.0F, armWidth, 6, 4, scaleFactor)
+                .hideFace(BoxSide.TOP)
+                .offsetTextureQuad(BoxSide.BOTTOM, 0, -6F)
+                .create();
+        leftArm.addChild(leftForeArm);
+
+        rightForeArm = new BendsModelPart(40, 22)
+                .setTextureSize(64, 64)
+                .setPosition(0.0F, 4.0F, 2.0F);
+        rightForeArm.developBox(-armWidth + 1, 0.0F, -4.0F, armWidth, 6, 4, scaleFactor)
+                .hideFace(BoxSide.TOP)
+                .offsetTextureQuad(BoxSide.BOTTOM, 0, -6F)
+                .create();
+        rightArm.addChild(rightForeArm);
+
+        rightLeg = new BendsModelPart(0, 16)
+                .setTextureSize(64, 64)
+                .setPosition(0.0F, 12F, 0F);
+        rightLeg.addCube(-3.9F, 0.0F, -2.0F, 4, 6, 4, scaleFactor);
+
+        leftLeg = new BendsModelPart(0, 16)
+                .setTextureSize(64, 64)
+                .setPosition(0.0F, 12.0F, 0.0F)
+                .setMirror(true);
+        leftLeg.addCube(-0.1F, 0.0F, -2.0F, 4, 6, 4, scaleFactor);
+
+        leftForeLeg = new BendsModelPart(0, 22)
+                .setTextureSize(64, 64)
+                .setPosition(0, 6.0F, -2.0F)
+                .setMirror(true);
+        leftForeLeg.developBox(-0.1F, 0.0F, 0.0F, 4, 6, 4, scaleFactor)
+                .inflate(0.01F, 0F, 0.01F)
+                .offsetTextureQuad(BoxSide.BOTTOM, 0, -6F)
+                .create();
+        leftLeg.addChild(leftForeLeg);
+
+        rightForeLeg = new BendsModelPart(0, 22)
+                .setTextureSize(64, 64)
+                .setPosition(0, 6.0F, -2.0F);
+        rightForeLeg.developBox(-3.9F, 0.0F, 0.0F, 4, 6, 4, scaleFactor)
+                .inflate(0.01F, 0F, 0.01F)
+                .offsetTextureQuad(BoxSide.BOTTOM, 0, -6F)
+                .create();
+        rightLeg.addChild(rightForeLeg);
+
+        createOuterParts(scaleFactor);
+
+        reconcileWithVanillaModel(humanoidViewOf(original));
+
+        return true;
+    }
+
+    protected void createOuterParts(float scaleFactor)
+    {
+        final float outerOffset = 0.25F;
+        final float limbWearHeight = (6F + 2 * scaleFactor + 0.5F) - 0.25F;
+        int armWidth = 4;
+        float armY = -10F;
+
+        outerBody = new BendsModelPart(16, 16)
+                .setTextureSize(64, 64)
+                .setPosition(0.0F, 12.0F, 0.0F);
+        outerBody.addCube(-4.0F, -12.0F, -2.0F, 8, 12, 4, scaleFactor + outerOffset);
+
+        createOuterHeadParts(scaleFactor, outerOffset);
+
+        outerLeftArm = new BendsModelPart(40, 16)
+                .setTextureSize(64, 64)
+                .setPosition(5.0F, armY, 0.0F)
+                .setMirror(true);
+        outerLeftArm.developBox(-1.0F, -2.0F, -2.0F, armWidth, 6, 4, scaleFactor + outerOffset)
+                .setHeight(limbWearHeight)
+                .inflate(0.0025F, 0F, 0.0025F)
+                .hideFace(BoxSide.BOTTOM)
+                .create();
+        outerBody.addChild(outerLeftArm);
+
+        outerRightArm = new BendsModelPart(40, 16)
+                .setTextureSize(64, 64)
+                .setPosition(-5.0F, armY, 0.0F);
+        outerRightArm.developBox(-armWidth + 1, -2.0F, -2.0F, armWidth, 6, 4, scaleFactor + outerOffset)
+                .setHeight(limbWearHeight)
+                .inflate(0.0025F, 0F, 0.0025F)
+                .hideFace(BoxSide.BOTTOM)
+                .create();
+        outerBody.addChild(outerRightArm);
+
+        outerLeftForeArm = new BendsModelPart(40, 22)
+                .setTextureSize(64, 64)
+                .setPosition(0.0F, 4.0F, 2.0F)
+                .setMirror(true);
+        outerLeftForeArm.developBox(-1.0F, 0.0F, -4.0F, armWidth, 6, 4, scaleFactor + outerOffset)
+                .setHeight(limbWearHeight)
+                .inflate(0.005F, 0F, 0.005F)
+                .offset(0F, 0.25F, 0F)
+                .hideFace(BoxSide.TOP)
+                .offsetTextureQuad(BoxSide.BOTTOM, 0, -6F)
+                .create();
+        outerLeftArm.addChild(outerLeftForeArm);
+
+        outerRightForeArm = new BendsModelPart(40, 22)
+                .setTextureSize(64, 64)
+                .setPosition(0.0F, 4.0F, 2.0F);
+        outerRightForeArm.developBox(-armWidth + 1, 0.0F, -4.0F, armWidth, 6, 4, scaleFactor + outerOffset)
+                .setHeight(limbWearHeight)
+                .inflate(0.005F, 0F, 0.005F)
+                .offset(0F, 0.25F, 0F)
+                .hideFace(BoxSide.TOP)
+                .offsetTextureQuad(BoxSide.BOTTOM, 0, -6F)
+                .create();
+        outerRightArm.addChild(outerRightForeArm);
+
+        outerRightLeg = new BendsModelPart(0, 16)
+                .setTextureSize(64, 64)
+                .setPosition(0.0F, 12F, 0F);
+        outerRightLeg.developBox(-3.9F, 0.0F, -2.0F, 4, 6, 4, scaleFactor + outerOffset)
+                .setHeight(limbWearHeight)
+                .hideFace(BoxSide.BOTTOM)
+                .create();
+
+        outerLeftLeg = new BendsModelPart(0, 16)
+                .setTextureSize(64, 64)
+                .setPosition(0.0F, 12.0F, 0.0F)
+                .setMirror(true);
+        outerLeftLeg.developBox(-0.1F, 0.0F, -2.0F, 4, 6, 4, scaleFactor + outerOffset)
+                .setHeight(limbWearHeight)
+                .hideFace(BoxSide.BOTTOM)
+                .create();
+
+        outerLeftForeLeg = new BendsModelPart(0, 22)
+                .setTextureSize(64, 64)
+                .setPosition(0, 6.0F, -2.0F)
+                .setMirror(true);
+        outerLeftForeLeg.developBox(-0.1F, 0.0F, 0.0F, 4, 6, 4, scaleFactor + outerOffset)
+                .setHeight(limbWearHeight)
+                .inflate(0.005F, 0F, 0.005F)
+                .offset(0F, 0.25F, 0F)
+                .hideFace(BoxSide.TOP)
+                .offsetTextureQuad(BoxSide.BOTTOM, 0, -6F)
+                .create();
+        outerLeftLeg.addChild(outerLeftForeLeg);
+
+        outerRightForeLeg = new BendsModelPart(0, 22)
+                .setTextureSize(64, 64)
+                .setPosition(0, 6.0F, -2.0F);
+        outerRightForeLeg.developBox(-3.9F, 0.0F, 0.0F, 4, 6, 4, scaleFactor + outerOffset)
+                .setHeight(limbWearHeight)
+                .inflate(0.005F, 0F, 0.005F)
+                .offset(0F, 0.25F, 0F)
+                .hideFace(BoxSide.TOP)
+                .offsetTextureQuad(BoxSide.BOTTOM, 0, -6F)
+                .create();
+        outerRightLeg.addChild(outerRightForeLeg);
+    }
+
+    @Override
+    public void performAnimations(D data, String animatedEntityKey,
+                                  LivingRenderer<E, M> renderer, float partialTicks)
+    {
+        if (data.externalPoseAdopted)
+        {
+            data.externalPoseAdopted = false;
+            clearAdoptedOffsets(data);
+        }
+
+        super.performAnimations(data, animatedEntityKey, renderer, partialTicks);
+    }
+
+    private static void clearAdoptedOffsets(BipedEntityData<?> data)
+    {
+        data.body.offset.set(0.0F, 0.0F, 0.0F);
+        data.head.offset.set(0.0F, 0.0F, 0.0F);
+        data.leftArm.offset.set(0.0F, 0.0F, 0.0F);
+        data.rightArm.offset.set(0.0F, 0.0F, 0.0F);
+        data.leftLeg.offset.set(0.0F, 0.0F, 0.0F);
+        data.rightLeg.offset.set(0.0F, 0.0F, 0.0F);
+        data.leftForeArm.offset.set(0.0F, 0.0F, 0.0F);
+        data.rightForeArm.offset.set(0.0F, 0.0F, 0.0F);
+        data.leftForeLeg.offset.set(0.0F, 0.0F, 0.0F);
+        data.rightForeLeg.offset.set(0.0F, 0.0F, 0.0F);
+    }
+
+    @Override
+    public void syncUpWithData(D data)
+    {
+        goblinbob.mobends.compat.PlayerAnimationLibCompat.applyToPose(
+                data, goblinbob.mobends.core.client.event.DataUpdateHandler.partialTicks);
+
+        goblinbob.mobends.compat.CarryOnCompat.applyToPose(data);
+
+        settlePoseForGui(data);
+
+        head.syncUp(data.head);
+        body.syncUp(data.body);
+        leftArm.syncUp(data.leftArm);
+        rightArm.syncUp(data.rightArm);
+        leftLeg.syncUp(data.leftLeg);
+        rightLeg.syncUp(data.rightLeg);
+        leftForeArm.syncUp(data.leftForeArm);
+        rightForeArm.syncUp(data.rightForeArm);
+        leftForeLeg.syncUp(data.leftForeLeg);
+        rightForeLeg.syncUp(data.rightForeLeg);
+
+        applyAdaptivePivots();
+    }
+
+    private void settlePoseForGui(D data)
+    {
+        final net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+
+        if (!goblinbob.mobends.standard.main.ModConfig.disableMovementInGui
+                || mc.screen == null
+                || data.getEntity() != mc.player)
+        {
+            return;
+        }
+
+        data.head.rotation.finish();
+        data.body.rotation.finish();
+        data.leftArm.rotation.finish();
+        data.rightArm.rotation.finish();
+        data.leftForeArm.rotation.finish();
+        data.rightForeArm.rotation.finish();
+        data.leftLeg.rotation.finish();
+        data.rightLeg.rotation.finish();
+        data.leftForeLeg.rotation.finish();
+        data.rightForeLeg.rotation.finish();
+        data.renderLeftItemRotation.finish();
+        data.renderRightItemRotation.finish();
+    }
+
+    protected void resolveAdaptivePivots()
+    {
+        if (adaptiveGeometry == null || adaptivePivotsResolved)
+        {
+            return;
+        }
+
+        if (goblinbob.mobends.compat.ModCompatManager.isExternallyPosed(MoBendsRenderContext.getCurrentEntity()))
+        {
+            return;
+        }
+
+        final BipedModel<?> vanilla = MoBendsRenderContext.getCurrentVanillaModel();
+        if (vanilla != null)
+        {
+            adaptiveGeometry.adoptRuntimePivots(vanilla);
+            applyAdaptivePivots();
+            reconcileWithVanillaModel(vanilla);
+        }
+
+        adaptivePivotsResolved = true;
+    }
+
+    public boolean isOverlayModel(Object model)
+    {
+        return isOverlayModel(model, null);
+    }
+
+    public boolean isOverlayModel(Object model, Object renderedParts)
+    {
+        if (!(model instanceof BipedModel<?>))
+        {
+            return false;
+        }
+        if (model == MoBendsRenderContext.getCurrentVanillaModel())
+        {
+            return true;
+        }
+        if (!overlayModelsResolved)
+        {
+            overlayModelsResolved = true;
+            collectOverlayModels();
+        }
+        if (overlayModels.contains(model))
+        {
+            return true;
+        }
+
+        final BipedModel<?> humanoidModel = (BipedModel<?>) model;
+
+        if (!rendersSplitLimb(humanoidModel, renderedParts))
+        {
+            return false;
+        }
+
+        return isBendableAccessoryModel(humanoidModel);
+    }
+
+    private static boolean rendersSplitLimb(BipedModel<?> model, Object renderedParts)
+    {
+        if (!(renderedParts instanceof Set<?>))
+        {
+            return false;
+        }
+        Set<?> parts = (Set<?>) renderedParts;
+        return parts.contains(model.leftArm) || parts.contains(model.rightArm)
+                || parts.contains(model.leftLeg) || parts.contains(model.rightLeg);
+    }
+
+    private float[] baseJointOverride()
+    {
+        if (leftForeArm == null || leftForeLeg == null)
+        {
+            return null;
+        }
+        return new float[]{
+                leftForeArm.position.y, leftForeArm.position.z,
+                leftForeLeg.position.y, leftForeLeg.position.z
+        };
+    }
+
+    private boolean isBendableAccessoryModel(BipedModel<?> model)
+    {
+        if (MoBendsRenderContext.isInArmorRender())
+        {
+            return false;
+        }
+
+        if (overlayGeometry.containsKey(model))
+        {
+            return overlayGeometry.get(model) != null;
+        }
+
+        AdaptiveHumanoidGeometry geometry = AdaptiveHumanoidGeometry.build(model, true, baseJointOverride());
+        if (geometry != null)
+        {
+            geometry.adoptRuntimePivots(model);
+        }
+
+        if (overlayGeometry.size() >= MAX_CACHED_OVERLAY_GEOMETRY)
+        {
+            overlayGeometry.clear();
+        }
+        overlayGeometry.put(model, geometry);
+        return geometry != null;
+    }
+
+    private void collectOverlayModels()
+    {
+        if (layerRenderers == null)
+        {
+            return;
+        }
+
+        for (LayerRenderer<E, M> layer : layerRenderers)
+        {
+            if (layer == null
+                    || layer instanceof BipedArmorLayer
+                    || layer instanceof LayerCustomBipedArmor)
+            {
+                continue;
+            }
+
+            for (Class<?> type = layer.getClass(); type != null && type != Object.class; type = type.getSuperclass())
+            {
+                for (Field field : type.getDeclaredFields())
+                {
+                    if (!BipedModel.class.isAssignableFrom(field.getType()))
+                    {
+                        continue;
+                    }
+                    try
+                    {
+                        field.setAccessible(true);
+                        if (field.get(layer) instanceof BipedModel<?>) {
+            BipedModel<?> found = (BipedModel<?>) field.get(layer);
+                            overlayModels.add(found);
+                        }
+                    }
+                    catch (Exception ignored)
+                    {
+                    }
+                }
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public void renderOverlayModel(BipedModel<?> model, Object renderedParts,
+                                   MatrixStack poseStack, IVertexBuilder vertexConsumer,
+                                   int packedLight, int packedOverlay, int color)
+    {
+        if (model == null || body == null)
+        {
+            return;
+        }
+
+        this.overlayRenderedParts = renderedParts instanceof Set<?>
+                ? (Set<ModelRenderer>) renderedParts
+                : null;
+        this.overlayRenderedModel = model;
+
+        poseStack.pushPose();
+        applyMainRenderPose(poseStack);
+
+        try
+        {
+            renderOverlayGeometry(model, poseStack, vertexConsumer, packedLight, packedOverlay, color);
+        }
+        finally
+        {
+            poseStack.popPose();
+        }
+    }
+
+    protected void adoptExternalArmPose()
+    {
+        if (!MoBendsRenderContext.isInMainModelRender())
+        {
+            return;
+        }
+
+        goblinbob.mobends.compat.NotEnoughAnimationsCompat.applyArmPose(
+                MoBendsRenderContext.getCurrentEntity(), this, MoBendsRenderContext.getCurrentVanillaModel());
+
+        goblinbob.mobends.compat.WatutCompat.applyPose(
+                MoBendsRenderContext.getCurrentEntity(), this, MoBendsRenderContext.getCurrentVanillaModel());
+
+        goblinbob.mobends.compat.EssentialCompat.applyEmotePose(
+                MoBendsRenderContext.getCurrentEntity(), this, MoBendsRenderContext.getCurrentVanillaModel());
+
+        goblinbob.mobends.compat.ParCoolCompat.applyPose(
+                MoBendsRenderContext.getCurrentEntity(), this, MoBendsRenderContext.getCurrentVanillaModel());
+    }
+
+    protected void captureRenderAnchorPose(MatrixStack poseStack)
+    {
+        if (!MoBendsRenderContext.isInMainModelRender())
+        {
+            return;
+        }
+
+        renderAnchorPose.set(poseStack.last().pose());
+        renderAnchorPoseValid = true;
+    }
+
+    private void applyMainRenderPose(MatrixStack poseStack)
+    {
+        if (!mainRenderPoseValid)
+        {
+            return;
+        }
+        poseStack.last().pose().set(mainRenderPose);
+        poseStack.last().normal().load(mainRenderNormal);
+    }
+
+    private void renderOverlayGeometry(BipedModel<?> model, MatrixStack poseStack, IVertexBuilder vertexConsumer,
+                                       int packedLight, int packedOverlay, int color)
+    {
+        if (model == MoBendsRenderContext.getCurrentVanillaModel())
+        {
+            renderMutated(poseStack, vertexConsumer, packedLight, packedOverlay, color);
+            return;
+        }
+
+        AdaptiveHumanoidGeometry geometry = overlayGeometry.get(model);
+        if (geometry == null)
+        {
+            geometry = AdaptiveHumanoidGeometry.build(model, true, baseJointOverride());
+            if (geometry == null)
+            {
+                return;
+            }
+            geometry.adoptRuntimePivots(model);
+            overlayGeometry.put(model, geometry);
+        }
+
+        final float[] baseBody = absoluteOf(null, body);
+        final float[] overlayBody = geometry.bodyPivot;
+
+        drawOverlay(poseStack, vertexConsumer, packedLight, packedOverlay, color,
+                model.body, body, geometry.bodyMesh, baseBody, overlayBody);
+
+        final float[] baseHead = absoluteOf(baseBody, head);
+        final float[] overlayHead = sum(overlayBody, geometry.headPivot);
+        drawOverlay(poseStack, vertexConsumer, packedLight, packedOverlay, color,
+                model.head, head, geometry.headMesh, baseHead, overlayHead);
+        drawOverlay(poseStack, vertexConsumer, packedLight, packedOverlay, color,
+                model.hat, head, geometry.hatMesh, baseHead, overlayHead);
+
+        drawLimb(poseStack, vertexConsumer, packedLight, packedOverlay, color, model.leftArm,
+                leftArm, leftForeArm, geometry.leftArmMesh, geometry.leftForeArmMesh,
+                baseBody, overlayBody, geometry.leftArmPivot, geometry.leftForeArmPivot);
+        drawLimb(poseStack, vertexConsumer, packedLight, packedOverlay, color, model.rightArm,
+                rightArm, rightForeArm, geometry.rightArmMesh, geometry.rightForeArmMesh,
+                baseBody, overlayBody, geometry.rightArmPivot, geometry.rightForeArmPivot);
+
+        drawLimb(poseStack, vertexConsumer, packedLight, packedOverlay, color, model.leftLeg,
+                leftLeg, leftForeLeg, geometry.leftLegMesh, geometry.leftForeLegMesh,
+                null, null, geometry.leftLegPivot, geometry.leftForeLegPivot);
+        drawLimb(poseStack, vertexConsumer, packedLight, packedOverlay, color, model.rightLeg,
+                rightLeg, rightForeLeg, geometry.rightLegMesh, geometry.rightForeLegMesh,
+                null, null, geometry.rightLegPivot, geometry.rightForeLegPivot);
+    }
+
+    private void drawLimb(MatrixStack poseStack, IVertexBuilder vertexConsumer,
+                          int packedLight, int packedOverlay, int color,
+                          ModelRenderer source, BendsModelPart upperBone, BendsModelPart foreBone,
+                          BendsMesh upperMesh, BendsMesh foreMesh,
+                          float[] baseParent, float[] overlayParent,
+                          float[] overlayUpperPivot, float[] overlayForePivot)
+    {
+        final float[] baseUpper = absoluteOf(baseParent, upperBone);
+        final float[] overlayUpper = overlayParent == null
+                ? overlayUpperPivot
+                : sum(overlayParent, overlayUpperPivot);
+
+        drawOverlay(poseStack, vertexConsumer, packedLight, packedOverlay, color,
+                source, upperBone, upperMesh, baseUpper, overlayUpper);
+
+        drawOverlay(poseStack, vertexConsumer, packedLight, packedOverlay, color,
+                source, foreBone, foreMesh,
+                absoluteOf(baseUpper, foreBone), sum(overlayUpper, overlayForePivot));
+    }
+
+    private boolean isOverlayPartRendered(ModelRenderer source)
+    {
+        if (overlayRenderedParts == null || source == null)
+        {
+            return true;
+        }
+        if (overlayRenderedParts.contains(source))
+        {
+            return true;
+        }
+        return overlayRenderedModel != null
+                && source == overlayRenderedModel.hat
+                && overlayRenderedParts.contains(overlayRenderedModel.head);
+    }
+
+    private void drawOverlay(MatrixStack poseStack, IVertexBuilder vertexConsumer,
+                             int packedLight, int packedOverlay, int color,
+                             ModelRenderer source, BendsModelPart bone, BendsMesh mesh,
+                             float[] baseAbsolute, float[] overlayAbsolute)
+    {
+        if (mesh == null || bone == null || !bone.isShowing())
+        {
+            return;
+        }
+        if (source != null && !source.visible)
+        {
+            return;
+        }
+        if (!isOverlayPartRendered(source))
+        {
+            return;
+        }
+
+        poseStack.pushPose();
+        bone.applyCharacterTransformPoseStack(poseStack);
+        poseStack.translate((overlayAbsolute[0] - baseAbsolute[0]) / 16.0F,
+                            (overlayAbsolute[1] - baseAbsolute[1]) / 16.0F,
+                            (overlayAbsolute[2] - baseAbsolute[2]) / 16.0F);
+        mesh.compile(poseStack.last(), vertexConsumer, packedLight, packedOverlay, color);
+        poseStack.popPose();
+    }
+
+    private static float[] absoluteOf(float[] parentAbsolute, BendsModelPart bone)
+    {
+        if (bone == null)
+        {
+            return parentAbsolute != null ? parentAbsolute : new float[3];
+        }
+        if (parentAbsolute == null)
+        {
+            return new float[] {bone.position.x, bone.position.y, bone.position.z};
+        }
+        return new float[] {
+                parentAbsolute[0] + bone.position.x,
+                parentAbsolute[1] + bone.position.y,
+                parentAbsolute[2] + bone.position.z
+        };
+    }
+
+    private static float[] sum(float[] a, float[] b)
+    {
+        return new float[] {a[0] + b[0], a[1] + b[1], a[2] + b[2]};
+    }
+
+    protected void applyAdaptivePivots()
+    {
+        if (adaptiveGeometry == null)
+        {
+            return;
+        }
+
+        setBonePivot(body, adaptiveGeometry.bodyPivot);
+        setBonePivot(head, adaptiveGeometry.headPivot);
+        setBonePivot(leftArm, adaptiveGeometry.leftArmPivot);
+        setBonePivot(rightArm, adaptiveGeometry.rightArmPivot);
+        setBonePivot(leftForeArm, adaptiveGeometry.leftForeArmPivot);
+        setBonePivot(rightForeArm, adaptiveGeometry.rightForeArmPivot);
+        setBonePivot(leftLeg, adaptiveGeometry.leftLegPivot);
+        setBonePivot(rightLeg, adaptiveGeometry.rightLegPivot);
+        setBonePivot(leftForeLeg, adaptiveGeometry.leftForeLegPivot);
+        setBonePivot(rightForeLeg, adaptiveGeometry.rightForeLegPivot);
+    }
+
+    private static void setBonePivot(BendsModelPart bone, float[] pivot)
+    {
+        if (bone != null)
+        {
+            bone.position.set(pivot[0], pivot[1], pivot[2]);
+        }
+    }
+
+    @Override
+    public boolean isModelVanilla(M model)
+    {
+        return this.body == null;
+    }
+
+    @Override
+    public boolean shouldModelBeSkipped(EntityModel<?> model)
+    {
+        return !(model instanceof BipedModel);
+    }
+
+    @Override
+    public boolean shouldRenderCustom()
+    {
+        return this.body != null;
+    }
+
+    @Override
+    public void renderMutated(MatrixStack poseStack, IVertexBuilder vertexConsumer,
+                              int packedLight, int packedOverlay, int color)
+    {
+        resolveAdaptivePivots();
+        applyBabyHeadScale();
+        syncConcealmentFromVanillaModel();
+        adoptExternalArmPose();
+
+        if (MoBendsRenderContext.isInMainModelRender())
+        {
+            mainRenderPose.set(poseStack.last().pose());
+            mainRenderNormal.load(poseStack.last().normal());
+            mainRenderPoseValid = true;
+        }
+
+        captureRenderAnchorPose(poseStack);
+
+        if (body != null)
+        {
+            body.render(poseStack, vertexConsumer, packedLight, packedOverlay, color);
+        }
+
+        renderAttachedParts(poseStack, vertexConsumer, packedLight, packedOverlay);
+
+        if (leftLeg != null)
+        {
+            leftLeg.render(poseStack, vertexConsumer, packedLight, packedOverlay, color);
+        }
+        if (rightLeg != null)
+        {
+            rightLeg.render(poseStack, vertexConsumer, packedLight, packedOverlay, color);
+        }
+    }
+
+    protected void renderAttachedParts(MatrixStack poseStack, IVertexBuilder vertexConsumer,
+                                       int packedLight, int packedOverlay)
+    {
+
+        if (attachedParts.isEmpty())
+        {
+            return;
+        }
+
+        for (AttachedPart attached : attachedParts)
+        {
+            final ModelRenderer part = attached.part;
+
+            if (!attached.bone.isShowing())
+            {
+                continue;
+            }
+
+            final java.util.Collection<ModelRenderer> foreignChildren = attached.useOwnTransform
+                    ? childrenOf(part)
+                    : java.util.Collections.emptyList();
+
+            if (!foreignChildren.isEmpty())
+            {
+                poseStack.pushPose();
+                attached.bone.applyCharacterTransformPoseStack(poseStack);
+
+                for (ModelRenderer child : foreignChildren)
+                {
+                    child.render(poseStack, vertexConsumer, packedLight, packedOverlay);
+                }
+
+                poseStack.popPose();
+                continue;
+            }
+
+            poseStack.pushPose();
+            attached.bone.applyCharacterTransformPoseStack(poseStack);
+            poseStack.translate(attached.offsetX / 16.0F,
+                                attached.offsetY / 16.0F,
+                                attached.offsetZ / 16.0F);
+
+            final float x = part.x, y = part.y, z = part.z;
+            final float xRot = part.xRot, yRot = part.yRot, zRot = part.zRot;
+            final boolean skipDraw = IModelRendererExt.of(part).mobends$getSkipDraw();
+            final boolean visible = part.visible;
+
+            part.x = 0.0F;
+            part.y = 0.0F;
+            part.z = 0.0F;
+            part.xRot = 0.0F;
+            part.yRot = 0.0F;
+            part.zRot = 0.0F;
+            IModelRendererExt.of(part).mobends$setSkipDraw(!attached.drawOwnCubes);
+            part.visible = true;
+
+            part.render(poseStack, vertexConsumer, packedLight, packedOverlay);
+
+            part.x = x;
+            part.y = y;
+            part.z = z;
+            part.xRot = xRot;
+            part.yRot = yRot;
+            part.zRot = zRot;
+            IModelRendererExt.of(part).mobends$setSkipDraw(skipDraw);
+            part.visible = visible;
+
+            poseStack.popPose();
+        }
+    }
+
+    protected void syncConcealmentFromVanillaModel()
+    {
+        final BipedModel<?> model = MoBendsRenderContext.getCurrentVanillaModel();
+        if (model == null)
+        {
+            return;
+        }
+
+        clearConcealment();
+
+        applyConcealment(head, model.head);
+        applyConcealment(body, model.body);
+        applyConcealment(leftArm, model.leftArm);
+        applyConcealment(leftForeArm, model.leftArm);
+        applyConcealment(rightArm, model.rightArm);
+        applyConcealment(rightForeArm, model.rightArm);
+        applyConcealment(leftLeg, model.leftLeg);
+        applyConcealment(leftForeLeg, model.leftLeg);
+        applyConcealment(rightLeg, model.rightLeg);
+        applyConcealment(rightForeLeg, model.rightLeg);
+
+        applySkinConcealment(model);
+
+        syncOuterConcealment(model);
+
+        if (goblinbob.mobends.compat.FirstPersonModelCompat.isRenderingFirstPersonBody())
+        {
+            concealHeadParts();
+        }
+    }
+
+    protected void concealHeadParts()
+    {
+        if (head != null) head.concealed = true;
+        if (headwear != null) headwear.concealed = true;
+        if (outerHead != null) outerHead.concealed = true;
+    }
+
+    private void applySkinConcealment(BipedModel<?> model)
+    {
+        if (!goblinbob.mobends.compat.ArmourersWorkshopCompat.isModLoaded())
+        {
+            return;
+        }
+
+        concealIfSkinned(head, model.head);
+        concealIfSkinned(body, model.body);
+        concealIfSkinned(leftArm, model.leftArm);
+        concealIfSkinned(leftForeArm, model.leftArm);
+        concealIfSkinned(rightArm, model.rightArm);
+        concealIfSkinned(rightForeArm, model.rightArm);
+        concealIfSkinned(leftLeg, model.leftLeg);
+        concealIfSkinned(leftForeLeg, model.leftLeg);
+        concealIfSkinned(rightLeg, model.rightLeg);
+        concealIfSkinned(rightForeLeg, model.rightLeg);
+    }
+
+    protected void clearConcealment()
+    {
+        clearConcealed(head);
+        clearConcealed(body);
+        clearConcealed(leftArm);
+        clearConcealed(leftForeArm);
+        clearConcealed(rightArm);
+        clearConcealed(rightForeArm);
+        clearConcealed(leftLeg);
+        clearConcealed(leftForeLeg);
+        clearConcealed(rightLeg);
+        clearConcealed(rightForeLeg);
+        clearConcealed(headwear);
+        clearConcealed(outerHead);
+        clearConcealed(outerBody);
+        clearConcealed(outerLeftArm);
+        clearConcealed(outerLeftForeArm);
+        clearConcealed(outerRightArm);
+        clearConcealed(outerRightForeArm);
+        clearConcealed(outerLeftLeg);
+        clearConcealed(outerLeftForeLeg);
+        clearConcealed(outerRightLeg);
+        clearConcealed(outerRightForeLeg);
+    }
+
+    protected static void clearConcealed(BendsModelPart part)
+    {
+        if (part != null)
+        {
+            part.concealed = false;
+        }
+    }
+
+    protected void syncOuterConcealment(BipedModel<?> model)
+    {
+        concealWith(headwear, head, model.hat);
+        concealWith(outerHead, head, model.hat);
+        concealWith(outerBody, body, model.body);
+        concealWith(outerLeftArm, leftArm, model.leftArm);
+        concealWith(outerLeftForeArm, leftForeArm, model.leftArm);
+        concealWith(outerRightArm, rightArm, model.rightArm);
+        concealWith(outerRightForeArm, rightForeArm, model.rightArm);
+        concealWith(outerLeftLeg, leftLeg, model.leftLeg);
+        concealWith(outerLeftForeLeg, leftForeLeg, model.leftLeg);
+        concealWith(outerRightLeg, rightLeg, model.rightLeg);
+        concealWith(outerRightForeLeg, rightForeLeg, model.rightLeg);
+    }
+
+    protected static void concealIfSkinned(BendsModelPart part, ModelRenderer modelPart)
+    {
+        if (part == null || modelPart == null)
+        {
+            return;
+        }
+        if (goblinbob.mobends.compat.armourers.AWHiddenParts.isHidden(modelPart))
+        {
+            part.concealed = true;
+        }
+    }
+
+    protected static void concealWith(BendsModelPart part, BendsModelPart basePart, ModelRenderer overlayPart)
+    {
+        if (part == null)
+        {
+            return;
+        }
+        if (basePart != null && basePart.concealed)
+        {
+            part.concealed = true;
+            return;
+        }
+        if (overlayPart != null && !overlayPart.visible)
+        {
+            part.concealed = true;
+            return;
+        }
+        concealIfSkinned(part, overlayPart);
+    }
+
+    private static void applyConcealment(BendsModelPart part, ModelRenderer modelPart)
+    {
+        if (part == null || modelPart == null)
+        {
+            return;
+        }
+        part.concealed = !modelPart.visible;
+    }
+
+    public void setBabyHeadScale(float scale)
+    {
+        this.babyHeadScale = scale;
+    }
+
+    protected void applyBabyHeadScale()
+    {
+        if (head != null)
+        {
+            head.scale.set(babyHeadScale, babyHeadScale, babyHeadScale);
+        }
+    }
+
+    public boolean hasOuterParts()
+    {
+        return outerBody != null;
+    }
+
+    public void renderOuter(MatrixStack poseStack, IVertexBuilder vertexConsumer,
+                            int packedLight, int packedOverlay, int color)
+    {
+        if (!hasOuterParts())
+        {
+            return;
+        }
+        syncOuterFromBase();
+
+        outerBody.render(poseStack, vertexConsumer, packedLight, packedOverlay, color);
+        outerLeftLeg.render(poseStack, vertexConsumer, packedLight, packedOverlay, color);
+        outerRightLeg.render(poseStack, vertexConsumer, packedLight, packedOverlay, color);
+    }
+
+    private void syncOuterFromBase()
+    {
+        copyAnimatedState(body, outerBody);
+        copyAnimatedState(head, outerHead);
+        copyAnimatedState(leftArm, outerLeftArm);
+        copyAnimatedState(rightArm, outerRightArm);
+        copyAnimatedState(leftForeArm, outerLeftForeArm);
+        copyAnimatedState(rightForeArm, outerRightForeArm);
+        copyAnimatedState(leftLeg, outerLeftLeg);
+        copyAnimatedState(rightLeg, outerRightLeg);
+        copyAnimatedState(leftForeLeg, outerLeftForeLeg);
+        copyAnimatedState(rightForeLeg, outerRightForeLeg);
+    }
+
+    private static void copyAnimatedState(BendsModelPart src, BendsModelPart dst)
+    {
+        if (src == null || dst == null) return;
+        dst.position.set(src.position);
+        dst.offset.set(src.offset);
+        dst.scale.set(src.scale);
+        dst.offsetScale = src.offsetScale;
+        dst.globalOffset.set(src.globalOffset);
+        dst.rotation.set(src.rotation);
+        dst.visible = src.visible;
+        dst.hidden = src.hidden;
+    }
+
+    public net.minecraft.util.math.vector.Matrix4f getRenderAnchorPose() { return renderAnchorPoseValid ? renderAnchorPose : null; }
+
+    public BendsModelPart getBody() { return body; }
+    public BendsModelPart getHead() { return head; }
+    public BendsModelPart getLeftArm() { return leftArm; }
+    public BendsModelPart getRightArm() { return rightArm; }
+    public BendsModelPart getLeftForeArm() { return leftForeArm; }
+    public BendsModelPart getRightForeArm() { return rightForeArm; }
+    public BendsModelPart getLeftLeg() { return leftLeg; }
+    public BendsModelPart getRightLeg() { return rightLeg; }
+    public BendsModelPart getLeftForeLeg() { return leftForeLeg; }
+    public BendsModelPart getRightForeLeg() { return rightForeLeg; }
+
+    private float[] vanillaBodyPos, vanillaHeadPos, vanillaLeftArmPos, vanillaRightArmPos,
+                    vanillaLeftLegPos, vanillaRightLegPos;
+    private boolean vanillaPositionsStored = false;
+
+    public void syncPosesToVanillaModel(BipedModel<?> model)
+    {
+        if (model == null) return;
+
+        if (adaptiveGeometry != null && !adaptivePivotsResolved) return;
+
+        if (!vanillaPositionsStored)
+        {
+            vanillaBodyPos = new float[]{model.body.x, model.body.y, model.body.z};
+            vanillaHeadPos = new float[]{model.head.x, model.head.y, model.head.z};
+            vanillaLeftArmPos = new float[]{model.leftArm.x, model.leftArm.y, model.leftArm.z};
+            vanillaRightArmPos = new float[]{model.rightArm.x, model.rightArm.y, model.rightArm.z};
+            vanillaLeftLegPos = new float[]{model.leftLeg.x, model.leftLeg.y, model.leftLeg.z};
+            vanillaRightLegPos = new float[]{model.rightLeg.x, model.rightLeg.y, model.rightLeg.z};
+            vanillaPositionsStored = true;
+        }
+
+        Quaternion bodyRotation = body.rotation.getSmooth();
+        float bodyPivotX = body.globalOffset.x + (body.position.x + body.offset.x) * body.offsetScale;
+        float bodyPivotY = body.globalOffset.y + (body.position.y + body.offset.y) * body.offsetScale;
+        float bodyPivotZ = body.globalOffset.z + (body.position.z + body.offset.z) * body.offsetScale;
+
+        float[] bodyNeck = rotateVectorByQuaternion(bodyRotation, 0.0F, -12.0F, 0.0F, scratchVec);
+        model.body.x = bodyPivotX + bodyNeck[0];
+        model.body.y = bodyPivotY + bodyNeck[1];
+        model.body.z = bodyPivotZ + bodyNeck[2];
+        float[] bodyEuler = quaternionToEulerXYZ(bodyRotation, scratchEuler);
+        model.body.xRot = bodyEuler[0];
+        model.body.yRot = bodyEuler[1];
+        model.body.zRot = bodyEuler[2];
+        model.body.visible = model.body.visible && body.isShowingIgnoringConcealment();
+
+        syncBodyChildToModelPart(head, model.head, bodyPivotX, bodyPivotY, bodyPivotZ, bodyRotation);
+
+        if (limbSubtreesBaked() && model.hat != null)
+        {
+            syncBodyChildToModelPart(head, model.hat, bodyPivotX, bodyPivotY, bodyPivotZ, bodyRotation);
+        }
+        syncBodyChildToModelPart(leftArm, model.leftArm, bodyPivotX, bodyPivotY, bodyPivotZ, bodyRotation);
+        syncBodyChildToModelPart(rightArm, model.rightArm, bodyPivotX, bodyPivotY, bodyPivotZ, bodyRotation);
+
+        syncPartToModelPart(leftLeg, model.leftLeg, vanillaLeftLegPos);
+        syncPartToModelPart(rightLeg, model.rightLeg, vanillaRightLegPos);
+
+        IModelRendererExt.of(model.head).mobends$setXScale(babyHeadScale);
+        IModelRendererExt.of(model.head).mobends$setYScale(babyHeadScale);
+        IModelRendererExt.of(model.head).mobends$setZScale(babyHeadScale);
+
+        if (model.hat != null && head != null)
+        {
+            IModelRendererExt.of(model.hat).mobends$setXScale(babyHeadScale);
+            IModelRendererExt.of(model.hat).mobends$setYScale(babyHeadScale);
+            IModelRendererExt.of(model.hat).mobends$setZScale(babyHeadScale);
+            model.hat.visible = model.hat.visible && head.isShowingIgnoringConcealment();
+            model.hat.x = model.head.x;
+            model.hat.y = model.head.y;
+            model.hat.z = model.head.z;
+            model.hat.xRot = model.head.xRot;
+            model.hat.yRot = model.head.yRot;
+            model.hat.zRot = model.head.zRot;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public BipedEntityData<?> getRenderData()
+    {
+        final LivingEntity entity = MoBendsRenderContext.getCurrentEntity();
+        if (entity == null) return null;
+
+        final Object data = goblinbob.mobends.core.data.EntityDatabase.instance.get(entity);
+        return data instanceof BipedEntityData<?> ? (BipedEntityData<?>) data : null;
+    }
+
+    public void adoptPoseFromVanillaModel(BipedModel<?> model, float[] restLeftLegPivot, float[] restRightLegPivot)
+    {
+        if (model == null || body == null) return;
+
+        final BipedEntityData<?> data = getRenderData();
+
+        readModelRotation(model.body, adoptedBodyRotation);
+
+        float[] neck = rotateVectorByQuaternion(adoptedBodyRotation, 0.0F, -12.0F, 0.0F, scratchVec);
+        final float bodyPivotX = model.body.x - neck[0];
+        final float bodyPivotY = model.body.y - neck[1];
+        final float bodyPivotZ = model.body.z - neck[2];
+
+        applyAdoptedRotation(body, data == null ? null : data.body, adoptedBodyRotation);
+        solveOffset(body, bodyPivotX - body.globalOffset.x,
+                bodyPivotY - body.globalOffset.y,
+                bodyPivotZ - body.globalOffset.z);
+        if (data != null)
+        {
+            solveOffset(data.body, bodyPivotX - data.body.globalOffset.x,
+                    bodyPivotY - data.body.globalOffset.y,
+                    bodyPivotZ - data.body.globalOffset.z);
+        }
+
+        adoptedParentInverse.set(-adoptedBodyRotation.x, -adoptedBodyRotation.y,
+                -adoptedBodyRotation.z, adoptedBodyRotation.w);
+
+        adoptBodyChild(head, data == null ? null : data.head, model.head, bodyPivotX, bodyPivotY, bodyPivotZ);
+        adoptBodyChild(leftArm, data == null ? null : data.leftArm, model.leftArm, bodyPivotX, bodyPivotY, bodyPivotZ);
+        adoptBodyChild(rightArm, data == null ? null : data.rightArm, model.rightArm, bodyPivotX, bodyPivotY, bodyPivotZ);
+
+        adoptRootPart(leftLeg, data == null ? null : data.leftLeg, model.leftLeg,
+                restLeftLegPivot != null ? restLeftLegPivot : vanillaLeftLegPos);
+        adoptRootPart(rightLeg, data == null ? null : data.rightLeg, model.rightLeg,
+                restRightLegPivot != null ? restRightLegPivot : vanillaRightLegPos);
+
+        straightenJoint(leftForeArm, data == null ? null : data.leftForeArm);
+        straightenJoint(rightForeArm, data == null ? null : data.rightForeArm);
+        straightenJoint(leftForeLeg, data == null ? null : data.leftForeLeg);
+        straightenJoint(rightForeLeg, data == null ? null : data.rightForeLeg);
+
+        if (data != null)
+        {
+            data.externalPoseAdopted = true;
+        }
+    }
+
+    public static void applyAdoptedRotation(BendsModelPart part, ModelPartTransform dataPart, Quaternion rotation)
+    {
+        if (part != null)
+        {
+            part.rotation.set(rotation.x, rotation.y, rotation.z, rotation.w);
+        }
+        if (dataPart != null)
+        {
+            dataPart.rotation.set(rotation.x, rotation.y, rotation.z, rotation.w);
+        }
+    }
+
+    private void adoptBodyChild(BendsModelPart child, ModelPartTransform dataChild, ModelRenderer modelPart,
+                                float bodyPivotX, float bodyPivotY, float bodyPivotZ)
+    {
+        if (child == null || modelPart == null) return;
+
+        readModelRotation(modelPart, adoptedRotation);
+        Quaternion.mul(adoptedParentInverse, adoptedRotation, scratchRotation);
+        applyAdoptedRotation(child, dataChild, scratchRotation);
+
+        float[] local = rotateVectorByQuaternion(adoptedParentInverse,
+                modelPart.x - bodyPivotX, modelPart.y - bodyPivotY, modelPart.z - bodyPivotZ, scratchPivot);
+
+        solveOffset(child, local[0] - child.globalOffset.x,
+                local[1] - child.globalOffset.y,
+                local[2] - child.globalOffset.z);
+
+        if (dataChild != null)
+        {
+            solveOffset(dataChild, local[0] - dataChild.globalOffset.x,
+                    local[1] - dataChild.globalOffset.y,
+                    local[2] - dataChild.globalOffset.z);
+        }
+    }
+
+    private void adoptRootPart(BendsModelPart part, ModelPartTransform dataPart, ModelRenderer modelPart, float[] restPivot)
+    {
+        if (part == null || modelPart == null) return;
+
+        readModelRotation(modelPart, adoptedRotation);
+        applyAdoptedRotation(part, dataPart, adoptedRotation);
+
+        if (restPivot != null)
+        {
+            final float dx = modelPart.x - restPivot[0];
+            final float dy = modelPart.y - restPivot[1];
+            final float dz = modelPart.z - restPivot[2];
+
+            part.offset.set(dx, dy, dz);
+            if (dataPart != null)
+            {
+                dataPart.offset.set(dx, dy, dz);
+            }
+        }
+    }
+
+    public static void straightenJoint(BendsModelPart part, ModelPartTransform dataPart)
+    {
+        if (part != null)
+        {
+            part.rotation.identity();
+            part.offset.set(0.0F, 0.0F, 0.0F);
+        }
+        if (dataPart != null)
+        {
+            dataPart.rotation.identity();
+            dataPart.offset.set(0.0F, 0.0F, 0.0F);
+        }
+    }
+
+    private static void solveOffset(BendsModelPart part, float localX, float localY, float localZ)
+    {
+        solveOffset(part.offset, part.position, part.offsetScale, localX, localY, localZ);
+    }
+
+    private static void solveOffset(ModelPartTransform part, float localX, float localY, float localZ)
+    {
+        solveOffset(part.offset, part.position, part.offsetScale, localX, localY, localZ);
+    }
+
+    private static void solveOffset(goblinbob.mobends.lib.math.vector.Vec3f offset,
+                                    goblinbob.mobends.lib.math.vector.Vec3f position,
+                                    float offsetScale, float localX, float localY, float localZ)
+    {
+        if (offsetScale == 0.0F)
+        {
+            offset.set(0.0F, 0.0F, 0.0F);
+            return;
+        }
+
+        offset.set(localX / offsetScale - position.x,
+                localY / offsetScale - position.y,
+                localZ / offsetScale - position.z);
+    }
+
+    private void readModelRotation(ModelRenderer modelPart, Quaternion dest)
+    {
+        adoptedOrientation
+                .orientInstantX((float) Math.toDegrees(modelPart.xRot))
+                .rotateInstantY((float) Math.toDegrees(modelPart.yRot))
+                .rotateInstantZ((float) Math.toDegrees(modelPart.zRot));
+        dest.set(adoptedOrientation.getSmooth());
+    }
+
+    public void restoreVanillaPivots(BipedModel<?> model)
+    {
+        if (model == null || !vanillaPositionsStored) return;
+
+        applyStoredPivot(model.body, vanillaBodyPos);
+        applyStoredPivot(model.head, vanillaHeadPos);
+        applyStoredPivot(model.hat, vanillaHeadPos);
+        applyStoredPivot(model.leftArm, vanillaLeftArmPos);
+        applyStoredPivot(model.rightArm, vanillaRightArmPos);
+        applyStoredPivot(model.leftLeg, vanillaLeftLegPos);
+        applyStoredPivot(model.rightLeg, vanillaRightLegPos);
+    }
+
+    private static void applyStoredPivot(ModelRenderer modelPart, float[] pivot)
+    {
+        if (modelPart == null || pivot == null) return;
+        modelPart.x = pivot[0];
+        modelPart.y = pivot[1];
+        modelPart.z = pivot[2];
+    }
+
+    private void syncPartToModelPart(BendsModelPart bendsPart, ModelRenderer modelPart, float[] vanillaPos)
+    {
+        if (bendsPart == null || modelPart == null) return;
+
+        if (vanillaPos != null)
+        {
+            modelPart.x = vanillaPos[0] + bendsPart.offset.x;
+            modelPart.y = vanillaPos[1] + bendsPart.offset.y;
+            modelPart.z = vanillaPos[2] + bendsPart.offset.z;
+        }
+
+        Quaternion q = bendsPart.rotation.getSmooth();
+        float[] euler = quaternionToEulerXYZ(q, scratchEuler);
+        modelPart.xRot = euler[0];
+        modelPart.yRot = euler[1];
+        modelPart.zRot = euler[2];
+
+        modelPart.visible = modelPart.visible && bendsPart.isShowingIgnoringConcealment();
+    }
+
+    private void syncBodyChildToModelPart(BendsModelPart child, ModelRenderer modelPart,
+                                          float bodyPivotX, float bodyPivotY, float bodyPivotZ,
+                                          Quaternion bodyRotation)
+    {
+        if (child == null || modelPart == null) return;
+        Quaternion rotation = composeChildWorld(bodyPivotX, bodyPivotY, bodyPivotZ, bodyRotation, child, scratchPivot);
+        setEndModelPart(modelPart, scratchPivot, rotation, modelPart.visible && child.isShowingIgnoringConcealment());
+    }
+
+    private Quaternion composeChildWorld(float parentPivotX, float parentPivotY, float parentPivotZ,
+                                        Quaternion parentRotation, BendsModelPart child, float[] outPivot)
+    {
+        float lx = (child.position.x + child.offset.x) * child.offsetScale;
+        float ly = (child.position.y + child.offset.y) * child.offsetScale;
+        float lz = (child.position.z + child.offset.z) * child.offsetScale;
+        float[] rotated = rotateVectorByQuaternion(parentRotation, lx, ly, lz, scratchVec);
+        outPivot[0] = parentPivotX + rotated[0];
+        outPivot[1] = parentPivotY + rotated[1];
+        outPivot[2] = parentPivotZ + rotated[2];
+        return Quaternion.mul(parentRotation, child.rotation.getSmooth(), scratchRotation);
+    }
+
+    private void setEndModelPart(ModelRenderer modelPart, float[] pivot, Quaternion rotation, boolean visible)
+    {
+        modelPart.x = pivot[0];
+        modelPart.y = pivot[1];
+        modelPart.z = pivot[2];
+        float[] euler = quaternionToEulerXYZ(rotation, scratchEuler);
+        modelPart.xRot = euler[0];
+        modelPart.yRot = euler[1];
+        modelPart.zRot = euler[2];
+        modelPart.visible = visible;
+    }
+
+    private static float[] rotateVectorByQuaternion(Quaternion q, float x, float y, float z)
+    {
+        return rotateVectorByQuaternion(q, x, y, z, new float[3]);
+    }
+
+    private static float[] rotateVectorByQuaternion(Quaternion q, float x, float y, float z, float[] dest)
+    {
+        float tx = 2.0F * (q.y * z - q.z * y);
+        float ty = 2.0F * (q.z * x - q.x * z);
+        float tz = 2.0F * (q.x * y - q.y * x);
+        dest[0] = x + q.w * tx + (q.y * tz - q.z * ty);
+        dest[1] = y + q.w * ty + (q.z * tx - q.x * tz);
+        dest[2] = z + q.w * tz + (q.x * ty - q.y * tx);
+        return dest;
+    }
+
+    private static final float[] ZERO_EULER = {0, 0, 0};
+
+    public float[] getPartEulerAngles(BendsModelPart part)
+    {
+        if (part == null) return ZERO_EULER;
+        return quaternionToEulerXYZ(part.rotation.getSmooth());
+    }
+
+    public static float[] eulerAnglesOf(Quaternion q)
+    {
+        if (q == null) return ZERO_EULER;
+        return quaternionToEulerXYZ(q);
+    }
+
+    private static float[] quaternionToEulerXYZ(Quaternion q)
+    {
+        return quaternionToEulerXYZ(q, new float[3]);
+    }
+
+    private static float[] quaternionToEulerXYZ(Quaternion q, float[] euler)
+    {
+
+        float sinX = 2.0f * (q.w * q.x + q.y * q.z);
+        float cosX = 1.0f - 2.0f * (q.x * q.x + q.y * q.y);
+        euler[0] = (float) Math.atan2(sinX, cosX);
+
+        float sinY = 2.0f * (q.w * q.y - q.z * q.x);
+        if (Math.abs(sinY) >= 1.0f)
+        {
+            euler[1] = (float) Math.copySign(Math.PI / 2, sinY);
+        }
+        else
+        {
+            euler[1] = (float) Math.asin(sinY);
+        }
+
+        float sinZ = 2.0f * (q.w * q.z + q.x * q.y);
+        float cosZ = 1.0f - 2.0f * (q.y * q.y + q.z * q.z);
+        euler[2] = (float) Math.atan2(sinZ, cosZ);
+
+        return euler;
+    }
+
+    protected static final class AttachedPart
+    {
+        private final ModelRenderer part;
+        private final BendsModelPart bone;
+        private final float offsetX, offsetY, offsetZ;
+        private final boolean drawOwnCubes;
+        private final boolean useOwnTransform;
+
+        private AttachedPart(ModelRenderer part, BendsModelPart bone,
+                             float offsetX, float offsetY, float offsetZ,
+                             boolean drawOwnCubes)
+        {
+            this(part, bone, offsetX, offsetY, offsetZ, drawOwnCubes, false);
+        }
+
+        private AttachedPart(ModelRenderer part, BendsModelPart bone,
+                             float offsetX, float offsetY, float offsetZ,
+                             boolean drawOwnCubes, boolean useOwnTransform)
+        {
+            this.useOwnTransform = useOwnTransform;
+            this.part = part;
+            this.bone = bone;
+            this.offsetX = offsetX;
+            this.offsetY = offsetY;
+            this.offsetZ = offsetZ;
+            this.drawOwnCubes = drawOwnCubes;
+        }
+    }
+
+    private static final class VanillaPartState
+    {
+        private final float x, y, z;
+        private final float xRot, yRot, zRot;
+        private final float xScale, yScale, zScale;
+        private final boolean visible, skipDraw;
+
+        private VanillaPartState(ModelRenderer part)
+        {
+            this.x = part.x;
+            this.y = part.y;
+            this.z = part.z;
+            this.xRot = part.xRot;
+            this.yRot = part.yRot;
+            this.zRot = part.zRot;
+            this.xScale = IModelRendererExt.of(part).mobends$getXScale();
+            this.yScale = IModelRendererExt.of(part).mobends$getYScale();
+            this.zScale = IModelRendererExt.of(part).mobends$getZScale();
+            this.visible = part.visible;
+            this.skipDraw = IModelRendererExt.of(part).mobends$getSkipDraw();
+        }
+
+        private static VanillaPartState capture(ModelRenderer part)
+        {
+            return part != null ? new VanillaPartState(part) : null;
+        }
+
+        private static void restore(VanillaPartState state, ModelRenderer part)
+        {
+            if (state == null || part == null)
+                return;
+
+            part.x = state.x;
+            part.y = state.y;
+            part.z = state.z;
+            part.xRot = state.xRot;
+            part.yRot = state.yRot;
+            part.zRot = state.zRot;
+            IModelRendererExt.of(part).mobends$setXScale(state.xScale);
+            IModelRendererExt.of(part).mobends$setYScale(state.yScale);
+            IModelRendererExt.of(part).mobends$setZScale(state.zScale);
+            part.visible = state.visible;
+            IModelRendererExt.of(part).mobends$setSkipDraw(state.skipDraw);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static java.util.Collection<ModelRenderer> childrenOf(ModelRenderer part)
+    {
+        if (part == null)
+        {
+            return java.util.Collections.emptyList();
+        }
+
+        for (java.lang.reflect.Field field : ModelRenderer.class.getDeclaredFields())
+        {
+            if (java.util.Map.class.isAssignableFrom(field.getType()))
+            {
+                field.setAccessible(true);
+                try
+                {
+                    final Object value = field.get(part);
+                    if (value instanceof java.util.Map<?, ?>)
+                    {
+                        java.util.Map<?, ?> map = (java.util.Map<?, ?>) value;
+                        return ((java.util.Map<String, ModelRenderer>) map).values();
+                    }
+                }
+                catch (Exception ignored)
+                {
+                }
+                break;
+            }
+        }
+
+        return IModelRendererExt.of(part).mobends$getChildren();
+    }
+
+}

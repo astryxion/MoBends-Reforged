@@ -1,0 +1,23 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "goblinbob.mobends.mixin",
+  "compatibilityLevel": "JAVA_8",
+  "refmap": "mobends-forge.refmap.json",
+  "mixins": [
+  ],
+  "client": [
+    "AgeableListModelMixin",
+    "BufferSourceCaptureMixin",
+    "ItemRendererArmorFoilMixin",
+    "HierarchicalModelMixin",
+    "SpiderModelMixin",
+    "RenderLayerMixin",
+    "PlayerRendererSwimMixin",
+    "InventoryScreenMixin",
+    "ModelRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

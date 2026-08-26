@@ -1,0 +1,39 @@
+package goblinbob.mobends.forge.network;
+
+import org.apache.logging.log4j.LogManager;
+import goblinbob.mobends.core.network.SharedNetworkConfiguration;
+import goblinbob.mobends.forge.network.msg.MessageConfigRequest;
+import net.minecraft.client.Minecraft;
+import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import org.apache.logging.log4j.Logger;
+
+public class ConfigSyncClientHandler
+{
+    private static final Logger LOGGER = LogManager.getLogger(ConfigSyncClientHandler.class);
+
+    @SubscribeEvent
+    public void onLoggingIn(ClientPlayerNetworkEvent.LoggedInEvent event)
+    {
+        SharedNetworkConfiguration.INSTANCE.resetToDefaults();
+
+        if (Minecraft.getInstance().getConnection() == null)
+        {
+            return;
+        }
+
+        try
+        {
+            ForgeNetworkHandler.getChannel().sendToServer(new MessageConfigRequest());
+        }
+        catch (Exception e)
+        {
+        }
+    }
+
+    @SubscribeEvent
+    public void onLoggingOut(ClientPlayerNetworkEvent.LoggedOutEvent event)
+    {
+        SharedNetworkConfiguration.INSTANCE.resetToDefaults();
+    }
+}

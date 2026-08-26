@@ -1,9 +1,15 @@
-# Mo' Bends Reforged
+# Mo' Bends (Reforged)
 
-Mo' Bends for 1.7.10, rebuilt with 1.12.2-style menus, live animation toggles, armor that follows bent limbs, and extra mod compatibility.
+If you think that Minecraft characters could be more realistic, instead of steady and rigid animations, this mod is just for you! It makes players seem alive, and adds epic sword animations!
 
-**Author:** Astryxion  
-**Credits:** Astryxion, IVESIRIS  
-**Version:** 1.2.0  
-**License:** [MIT](LICENSE)  
-**URL:** https://github.com/astryxion/MoBends-Reforged
+## Attribution
+
+**Author:** Astryxion
+
+**Credits:** GoblinBob, Sxilverr, ThatSoulyGuy
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
+See the [LICENSE](LICENSE) file for the full license text.

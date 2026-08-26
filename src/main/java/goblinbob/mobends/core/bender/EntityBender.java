@@ -1,0 +1,251 @@
+package goblinbob.mobends.core.bender;
+
+import com.mojang.blaze3d.matrix.MatrixStack;
+import goblinbob.mobends.api.entity.IMobSpawnHelper;
+import goblinbob.mobends.core.client.MutatedRenderer;
+import goblinbob.mobends.core.data.EntityData;
+import goblinbob.mobends.core.data.IEntityDataFactory;
+import goblinbob.mobends.core.data.LivingEntityData;
+import goblinbob.mobends.core.mutators.IMutatorFactory;
+import goblinbob.mobends.core.mutators.Mutator;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.entity.model.EntityModel;
+import net.minecraft.client.renderer.entity.LivingRenderer;
+import net.minecraft.client.resources.I18n;
+import net.minecraft.util.registry.Registry;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.entity.EntityType;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.MobEntity;
+import net.minecraft.entity.SpawnReason;
+import net.minecraft.world.World;
+
+import javax.annotation.Nullable;
+import java.lang.reflect.InvocationTargetException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Map.Entry;
+
+public abstract class EntityBender<T extends LivingEntity>
+{
+    protected final String key;
+    protected final String unlocalizedName;
+
+    private final MutatedRenderer<T> renderer;
+    public final Class<T> entityClass;
+
+    private final Map<LivingRenderer<? extends T, ?>, Mutator<LivingEntityData<T>, T, ?>> mutatorMap = new HashMap<>();
+
+    private boolean animate;
+    protected Map<String, BoneMetadata> boneMetadataMap;
+
+    public EntityBender(String modId, @Nullable String key, String unlocalizedName, Class<T> entityClass,
+                        MutatedRenderer<T> renderer)
+    {
+        if (renderer == null)
+            throw new NullPointerException("The mutated renderer cannot be null.");
+        if (entityClass == null)
+            throw new NullPointerException("The entity class cannot be null.");
+        if (modId == null)
+            throw new NullPointerException("The Mod ID cannot be null.");
+
+        if (key == null)
+        {
+            EntityType<?> entityType = getEntityTypeForClass(entityClass);
+            if (entityType == null)
+                throw new RuntimeException("Unable to find an EntityType for " + entityClass.getName());
+
+            ResourceLocation resourceLocation = Registry.ENTITY_TYPE.getKey(entityType);
+            if (resourceLocation == null)
+                throw new RuntimeException("Unable to find a key for " + entityClass.getName());
+
+            key = resourceLocation.toString();
+            unlocalizedName = "entity." + resourceLocation.getNamespace() + "." + resourceLocation.getPath();
+        }
+
+        this.key = modId + "-" + key;
+        this.unlocalizedName = unlocalizedName;
+        this.entityClass = entityClass;
+        this.renderer = renderer;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T extends LivingEntity> EntityType<T> getEntityTypeForClass(Class<T> entityClass)
+    {
+        for (EntityType<?> entityType : Registry.ENTITY_TYPE)
+        {
+            try
+            {
+                String className = entityClass.getSimpleName();
+                if (className.endsWith("Entity"))
+                {
+                    className = className.substring(0, className.length() - "Entity".length());
+                }
+                if (className.equalsIgnoreCase(
+                        Registry.ENTITY_TYPE.getKey(entityType).getPath().replace("_", "")))
+                {
+                    return (EntityType<T>) entityType;
+                }
+            }
+            catch (Exception ignored) {}
+        }
+        return null;
+    }
+
+    public abstract String[] getAlterableParts();
+
+    public String[] getSupportedAnimations()
+    {
+        return new String[] { "walk", "jump", "fall" };
+    }
+
+    public abstract IEntityDataFactory<T> getDataFactory();
+
+    public abstract IMutatorFactory<T> getMutatorFactory();
+
+    public abstract IPreviewer<?> getPreviewer();
+
+    public abstract LivingEntityData<?> getDataForPreview();
+
+    protected MutatedRenderer<T> getMutatedRenderer()
+    {
+        return this.renderer;
+    }
+
+    public String getKey()
+    {
+        return this.key;
+    }
+
+    public String getUnlocalizedName()
+    {
+        return this.unlocalizedName;
+    }
+
+    public String getLocalizedName()
+    {
+        return I18n.get(this.unlocalizedName);
+    }
+
+    public boolean isAnimated()
+    {
+        return this.animate;
+    }
+
+    public void setAnimate(boolean animate)
+    {
+        this.animate = animate;
+    }
+
+    public void beforeRender(EntityData<T> data, T entity, float partialTicks, MatrixStack poseStack)
+    {
+        this.renderer.beforeRender(data, entity, partialTicks, poseStack);
+        goblinbob.mobends.api.event.MoBendsPoseEvents.dispatch(entity, partialTicks);
+    }
+
+    public void afterRender(T entity, float partialTicks, MatrixStack poseStack)
+    {
+        this.renderer.afterRender(entity, partialTicks, poseStack);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <M extends EntityModel<T>> boolean applyMutation(LivingRenderer<T, M> renderer, T entity, float partialTicks)
+    {
+        Mutator<LivingEntityData<T>, T, M> mutator = (Mutator<LivingEntityData<T>, T, M>) mutatorMap.get(renderer);
+        if (mutator == null)
+        {
+            mutator = (Mutator<LivingEntityData<T>, T, M>) this.getMutatorFactory().createMutator(this.getDataFactory());
+            if (!mutator.mutate(renderer))
+            {
+                return false;
+            }
+
+            mutatorMap.put(renderer, (Mutator<LivingEntityData<T>, T, ?>) mutator);
+        }
+
+        mutator.updateModel(entity, renderer, partialTicks);
+        LivingEntityData<T> data = mutator.getOrMakeData(entity);
+        mutator.performAnimations(data, this.key, renderer, partialTicks);
+        mutator.syncUpWithData(data);
+
+        return true;
+    }
+
+    @SuppressWarnings("unchecked")
+    public <M extends EntityModel<T>> void deapplyMutation(LivingRenderer<T, M> renderer, LivingEntity entity)
+    {
+        if (mutatorMap.containsKey(renderer))
+        {
+            Mutator<LivingEntityData<T>, T, M> mutator = (Mutator<LivingEntityData<T>, T, M>) mutatorMap.get(renderer);
+            mutator.demutate(renderer);
+            mutatorMap.remove(renderer);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public void demutateAll()
+    {
+        for (Entry<LivingRenderer<? extends T, ?>, Mutator<LivingEntityData<T>, T, ?>> entry : mutatorMap.entrySet())
+        {
+            LivingRenderer<T, EntityModel<T>> renderer = (LivingRenderer<T, EntityModel<T>>) entry.getKey();
+            Mutator<LivingEntityData<T>, T, EntityModel<T>> mutator = (Mutator<LivingEntityData<T>, T, EntityModel<T>>) entry.getValue();
+            mutator.demutate(renderer);
+        }
+
+        mutatorMap.clear();
+    }
+
+    @SuppressWarnings("unchecked")
+    public void refreshMutation()
+    {
+        for (Entry<LivingRenderer<? extends T, ?>, Mutator<LivingEntityData<T>, T, ?>> entry : mutatorMap.entrySet())
+        {
+            LivingRenderer<T, EntityModel<T>> renderer = (LivingRenderer<T, EntityModel<T>>) entry.getKey();
+            Mutator<LivingEntityData<T>, T, EntityModel<T>> mutator = (Mutator<LivingEntityData<T>, T, EntityModel<T>>) entry.getValue();
+            mutator.demutate(renderer);
+            mutator.mutate(renderer);
+            mutator.postRefresh();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public T createPreviewEntity()
+    {
+        try
+        {
+            World level = Minecraft.getInstance().level;
+            if (level == null) return null;
+
+            MobEntity entity = (MobEntity) this.entityClass.getConstructor(EntityType.class, World.class)
+                .newInstance(getEntityTypeForClass(entityClass), level);
+            entity.moveTo(0, 0, 0, 0, 0);
+            IMobSpawnHelper helper = IMobSpawnHelper.Holder.getHelper();
+            if (helper != null)
+            {
+                Object serverLevel = Minecraft.getInstance().getSingleplayerServer() != null
+                    ? Minecraft.getInstance().getSingleplayerServer().overworld()
+                    : null;
+                helper.finalizeSpawn(
+                    entity,
+                    serverLevel,
+                    level.getCurrentDifficultyAt(entity.blockPosition()),
+                    SpawnReason.COMMAND
+                );
+            }
+            PreviewHelper.registerPreviewEntity(entity);
+
+            return (T) entity;
+        }
+        catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | SecurityException e)
+        {
+            e.printStackTrace();
+        }
+
+        return null;
+    }
+
+    public Mutator<?, ?, ?> getMutator(LivingRenderer<? extends LivingEntity, ?> renderer)
+    {
+        return this.mutatorMap.get(renderer);
+    }
+}
